@@ -1,0 +1,11 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{tenantId}/{allPaths=**} {
+      // Publik bisa baca file
+      allow read: if true;
+      // Hanya user login yang bisa upload/edit/hapus
+      allow write: if request.auth != null;
+    }
+  }
+}

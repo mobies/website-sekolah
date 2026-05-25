@@ -1,0 +1,45 @@
+{
+  "rules": {
+    "tenants": {
+      "$tenantId": {
+        // Publik bisa baca setting sekolah dan konten publik
+        "settings": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "news": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "agenda": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "announcements": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "gallery_albums": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "gallery_photos": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "e_services": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "stats": {
+          ".read": true,
+          ".write": "auth != null"
+        },
+        "logs": {
+          ".read": "auth != null",
+          ".write": "auth != null"
+        }
+      }
+    }
+  }
+}
