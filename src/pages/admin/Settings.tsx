@@ -1,35 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Button, Form, Row, Col, Spinner, Table, Modal, Badge, Nav, Tab } from 'react-bootstrap';
-import { FaSave, FaPlus, FaTrash, FaImage, FaUserTie, FaThLarge, FaEllipsisH, FaSmile, FaFontAwesome, FaBootstrap, FaCode, FaEdit, FaCloudUploadAlt } from 'react-icons/fa';
+import { Container, Card, Form, Button, Row, Col, Spinner, ListGroup, Modal, Badge } from 'react-bootstrap';
+import { FaSave, FaTrash, FaPlus, FaSchool, FaImage, FaUserTie, FaExternalLinkAlt, FaEdit, FaCogs } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef, getStorageRef, logActivity, updateCounter } from '../../firebase/utils';
 import { onValue, set, push, remove } from 'firebase/database';
 import { uploadBytes, getDownloadURL } from 'firebase/storage';
-import { convertToWebP } from '../../firebase/imageUtils';
-import { showAlert, showConfirm, toast } from '../../utils/alerts';
+import { showAlert, toast, showConfirm } from '../../utils/alerts';
 import IconRenderer from '../../components/IconRenderer';
 
-interface Slide {
+interface HeroSlide {
   id: string;
   url: string;
   title: string;
   subtitle: string;
-  link?: string; // Optional link for the slide
-}
-
-interface SchoolSettings {
-  schoolName: string;
-  tagline: string;
-  level: string;
-  eServicesLayout: 'bento' | 'slider';
-  logo?: string;
-  heroSlides: Array<Slide>;
-  headmaster: {
-    name: string;
-    greeting: string;
-    photo?: string;
-  };
 }
 
 interface EService {
@@ -44,766 +28,430 @@ interface EService {
 
 const Settings: React.FC = () => {
   const { tenantId, terms } = useTenant();
-  const [settings, setSettings] = useState<SchoolSettings>({
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Core Settings State
+  const [formData, setFormData] = useState({
     schoolName: '',
     tagline: '',
-    level: 'MTs',
-    eServicesLayout: 'bento',
-    heroSlides: [],
-    headmaster: {
-      name: '',
-      greeting: ''
-    }
+    logo: '',
+    eServicesLayout: 'bento' as 'bento' | 'slider',
+    headmaster: { name: '', photo: '', greeting: '' }
   });
+
+  const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
   const [eServices, setEServices] = useState<EService[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
   
-  const [logoFile, setLogoFile] = useState<File | null>(null);
-  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+  // File Upload States
+  const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
+  const [headmasterPhotoFile, setHeadmasterPhotoFile] = useState<File | null>(null);
+  const [newSlideFile, setNewSlideFile] = useState<File | null>(null);
+  const [newSlideData, setNewSlideData] = useState({ title: '', subtitle: '' });
   
-  const [hmFile, setHmFile] = useState<File | null>(null);
-  const [hmPreview, setHmPreview] = useState<string | null>(null);
-
   // E-Service Modal State
-  const [showEServiceModal, setShowEServiceModal] = useState(false);
-  const [currentEService, setCurrentEService] = useState<Partial<EService>>({
-    title: '',
-    url: '',
-    bgColor: '#198754',
-    textColor: '#ffffff',
-    icon: '🎓',
-    iconType: 'emoji'
+  const [showServiceModal, setShowServiceModal] = useState(false);
+  const [currentService, setCurrentService] = useState<Partial<EService>>({
+     title: '', url: '', bgColor: '#198754', textColor: '#ffffff', icon: '🚀', iconType: 'emoji'
   });
 
-  // Slide Modal State
-  const [showSlideModal, setShowSlideModal] = useState(false);
-  const [currentSlide, setCurrentSlide] = useState<Partial<Slide>>({
-    title: '',
-    subtitle: '',
-    url: '',
-    link: ''
-  });
-  const [slideImageFile, setSlideImageFile] = useState<File | null>(null);
-  const [slideImagePreview, setSlideImagePreview] = useState<string | null>(null);
-  const [slideLoading, setSlideLoading] = useState(false);
-
-  const iconSets = {
-    emoji: [
-      '🎓', '📝', '📚', '📜', '🏫', '🖥️', '💻', '🎒', '🧪', '🎨', 
-      '⚽', '📢', '🤝', '🌍', '🚌', '🍴', '📅', '🔐', '👤', '💰',
-      '📊', '🏆', '⭐', '📍', '📞', '📧', '⏰', '📖', '📁', '💡'
-    ],
-    bi: [
-      'BiBook', 'BiCalendarEvent', 'BiCamera', 'BiChatDots', 'BiCheckCircle',
-      'BiCloudDownload', 'BiCreditCard', 'BiEnvelope', 'BiFile', 'BiGlobe',
-      'BiGraduationCap', 'BiHeadphone', 'BiHomeAlt', 'BiImage', 'BiInfoCircle',
-      'BiLink', 'BiListUl', 'BiLockAlt', 'BiMap', 'BiMessageSquareDetail',
-      'BiMicrophone', 'BiMouse', 'BiNotification', 'BiPaperclip', 'BiPencil',
-      'BiPhone', 'BiSearch', 'BiShield', 'BiStar', 'BiUser'
-    ],
-    fa: [
-      'FaSchool', 'FaGraduationCap', 'FaBook', 'FaChalkboardTeacher', 'FaUserGraduate',
-      'FaCalendarAlt', 'FaNewspaper', 'FaImages', 'FaVideo', 'FaComments',
-      'FaGlobe', 'FaEnvelope', 'FaPhone', 'FaMapMarkerAlt', 'FaShieldAlt',
-      'FaUniversity', 'FaUserFriends', 'FaBullhorn', 'FaLightbulb', 'FaHeart'
-    ],
-    hi: [
-      'HiAcademicCap', 'HiAnnotation', 'HiBeaker', 'HiBookOpen', 'HiBriefcase',
-      'HiCalculator', 'HiCalendar', 'HiCamera', 'HiChartBar', 'HiChat',
-      'HiClipboardList', 'HiCloudDownload', 'HiCode', 'HiColorSwatch', 'HiDesktopComputer',
-      'HiDocumentText', 'HiFingerPrint', 'HiGlobe', 'HiIdentification', 'HiLibrary'
-    ],
-    fc: [
-      'FcAddressBook', 'FcApprove', 'FcAssistant', 'FcBriefcase', 'FcBullright',
-      'FcCalculator', 'FcCalendar', 'FcCamera', 'FcClime', 'FcConferenceCall',
-      'FcCustomerSupport', 'FcDatabase', 'FcDepartment', 'FcDiploma', 'FcDisplay',
-      'FcDocument', 'FcElectronics', 'FcEnteringHeavenAlive', 'FcExternal', 'FcFile',
-      'FcGraduationCap', 'FcHome', 'FcIdea', 'FcLibrary', 'FcNeutralDecision',
-      'FcOnlineSupport', 'FcOk', 'FcReading', 'FcRules', 'FcSerialTasks'
-    ]
+  // Icon Lists
+  const iconOptions = {
+    emoji: ['🚀', '🏫', '📚', '🎓', '📅', '📢', '💻', '🌍', '🏠', '📝', '🏆', '⚽', '🎨', '🔬', '💡'],
+    fa: ['FaHome', 'FaUser', 'FaBook', 'FaInfoCircle', 'FaPhone', 'FaGraduationCap', 'FaGlobe', 'FaEnvelope', 'FaLaptop', 'FaRegListAlt', 'FaBullhorn', 'FaUsers', 'FaBriefcase', 'FaChartLine', 'FaCloud'],
+    bi: ['BiHome', 'BiUser', 'BiBook', 'BiInfoCircle', 'BiPhone', 'BiMap', 'BiGlobe', 'BiEnvelope', 'BiLaptop', 'BiListUl', 'BiNews', 'BiCamera', 'BiCloudUpload', 'BiBriefcase', 'BiTrophy'],
+    hi: ['HiHome', 'HiUser', 'HiBookOpen', 'HiInformationCircle', 'HiPhone', 'HiMail', 'HiGlobeAlt', 'HiAcademicCap', 'HiCalendar', 'HiBell', 'HiBriefcase', 'HiChip', 'HiCamera', 'HiChartBar', 'HiCloud'],
+    fc: ['FcHome', 'FcAbout', 'FcAddressBook', 'FcBullhorn', 'FcCalendar', 'FcConferenceCall', 'FcDocument', 'FcEngineering', 'FcGraduationCap', 'FcInfo', 'FcLibrary', 'FcLink', 'FcPortraitMode', 'FcPositiveDynamic', 'FcSettings']
   };
 
   useEffect(() => {
     if (!tenantId) return;
 
-    const timeout = setTimeout(() => {
-      setFetching(false);
-    }, 5000);
-
-    // Fetch School Settings
-    const settingsRef = getDBRef(tenantId, 'settings');
-    const unsubSettings = onValue(settingsRef, (snapshot) => {
-      clearTimeout(timeout);
-      const data = snapshot.val();
+    // 1. Fetch Basic Settings
+    const unsubSettings = onValue(getDBRef(tenantId, 'settings'), (snap) => {
+      const data = snap.val();
       if (data) {
-        setSettings({
+        setFormData({
           schoolName: data.schoolName || '',
           tagline: data.tagline || '',
-          level: data.level || 'MTs',
+          logo: data.logo || '',
           eServicesLayout: data.eServicesLayout || 'bento',
-          logo: data.logo || '/logo.png',
-          heroSlides: data.heroSlides || [],
-          headmaster: data.headmaster || { name: '', greeting: '', photo: '' }
+          headmaster: data.headmaster || { name: '', photo: '', greeting: '' }
         });
-        if (data.logo) setLogoPreview(data.logo);
-        if (data.headmaster?.photo) setHmPreview(data.headmaster.photo);
-      } else {
-        setSettings(prev => ({
-          ...prev,
-          heroSlides: [] // Ensure heroSlides is an empty array if no data
-        }));
+        if (data.heroSlides) setHeroSlides(data.heroSlides);
       }
+      setLoading(false);
     });
 
-    // Fetch E-Services
-    const servicesRef = getDBRef(tenantId, 'e_services');
-    const unsubServices = onValue(servicesRef, (snapshot) => {
-      const data = snapshot.val();
+    // 2. E-Services
+    const unsubServices = onValue(getDBRef(tenantId, 'e_services'), (snap) => {
+      const data = snap.val();
       if (data) {
-        const list = Object.keys(data).map(key => ({ id: key, ...data[key] }));
-        setEServices(list);
-      } else {
-        setEServices([]);
-      }
-      setFetching(false);
+        setEServices(Object.keys(data).map(key => ({ id: key, ...data[key] })));
+      } else setEServices([]);
     });
 
-    return () => {
-      unsubSettings();
-      unsubServices();
-      clearTimeout(timeout);
-    };
+    return () => { unsubSettings(); unsubServices(); };
   }, [tenantId]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    if (name.startsWith('hm_')) {
-      const field = name.replace('hm_', '');
-      setSettings(prev => ({
-        ...prev,
-        headmaster: { ...prev.headmaster, [field]: value }
-      }));
-    } else {
-      setSettings(prev => ({ ...prev, [name]: value }));
-    }
-  };
-
-  // Logo Handlers
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setLogoFile(file);
-      setLogoPreview(URL.createObjectURL(file));
-    }
-  };
-
-  // Headmaster Photo Handlers
-  const handleHmPhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setHmFile(file);
-      setHmPreview(URL.createObjectURL(file));
-    }
-  };
-
-  // Slide Handlers
-  const handleSlideModalShow = (slide?: Slide) => {
-    if (slide) {
-      setCurrentSlide(slide);
-      setSlideImagePreview(slide.url || null);
-    } else {
-      setCurrentSlide({ title: '', subtitle: '', url: '', link: '' });
-      setSlideImageFile(null);
-      setSlideImagePreview(null);
-    }
-    setShowSlideModal(true);
-  };
-
-  const handleSlideImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSlideImageFile(file);
-      setSlideImagePreview(URL.createObjectURL(file));
-    }
-  };
-
-  const handleSaveSlide = async (e: React.FormEvent) => {
+  const handleSaveGeneral = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSlideLoading(true);
-
-    if (!currentSlide.title || !currentSlide.subtitle || !slideImagePreview) {
-      setSlideLoading(false);
-      return showAlert('Peringatan', 'Judul, deskripsi, dan gambar slide wajib diisi.', 'warning');
-    }
-
+    if (!tenantId) return;
+    setSaving(true);
     try {
-      let imageUrl = slideImagePreview;
-
-      if (slideImageFile) {
-        const webpBlob = await convertToWebP(slideImageFile, 0.7);
-        const fileName = `slide_${Date.now()}.webp`;
-        const fileRef = getStorageRef(tenantId, `settings/slides/${fileName}`);
-        const uploadResult = await uploadBytes(fileRef, webpBlob);
-        imageUrl = await getDownloadURL(uploadResult.ref);
+      let finalLogo = formData.logo;
+      if (newLogoFile) {
+        const fileRef = getStorageRef(tenantId, `settings/logo/logo_${Date.now()}.png`);
+        await uploadBytes(fileRef, newLogoFile);
+        finalLogo = await getDownloadURL(fileRef);
       }
 
-      const newSlideData = {
-        id: currentSlide.id || Date.now().toString(),
-        title: currentSlide.title,
-        subtitle: currentSlide.subtitle,
-        url: imageUrl,
-        link: currentSlide.link || ''
+      let headmasterPhoto = formData.headmaster.photo;
+      if (headmasterPhotoFile) {
+        const fileRef = getStorageRef(tenantId, `settings/headmaster/hm_${Date.now()}.jpg`);
+        await uploadBytes(fileRef, headmasterPhotoFile);
+        headmasterPhoto = await getDownloadURL(fileRef);
+      }
+
+      const updatedData = {
+        ...formData,
+        logo: finalLogo,
+        headmaster: { ...formData.headmaster, photo: headmasterPhoto }
       };
 
-      const updatedSlides = currentSlide.id
-        ? settings.heroSlides.map(s => (s.id === currentSlide.id ? newSlideData : s))
-        : [...settings.heroSlides, newSlideData];
+      await set(getDBRef(tenantId, 'settings'), { ...updatedData, heroSlides });
+      await logActivity(tenantId, { action: 'EDIT', target: 'SETTINGS', title: 'Update Profil & Logo' });
+      
+      setNewLogoFile(null);
+      setHeadmasterPhotoFile(null);
+      toast.fire({ icon: 'success', title: 'Pengaturan umum berhasil disimpan' });
+    } catch (err) { 
+      console.error(err);
+      showAlert('Gagal', 'Gagal menyimpan pengaturan umum.', 'error');
+    } finally { setSaving(false); }
+  };
 
-      setSettings(prev => ({ ...prev, heroSlides: updatedSlides }));
-      await set(getDBRef(tenantId, 'settings/heroSlides'), updatedSlides); // Update only slides path
+  const handleAddSlide = async () => {
+    if (!tenantId || !newSlideFile) return;
+    setSaving(true);
+    try {
+      const fileRef = getStorageRef(tenantId, `settings/slides/slide_${Date.now()}.jpg`);
+      await uploadBytes(fileRef, newSlideFile);
+      const url = await getDownloadURL(fileRef);
 
-      logActivity(tenantId, { 
-        action: currentSlide.id ? 'EDIT' : 'TAMBAH', 
-        target: 'SLIDESHOW', 
-        title: `Slide: ${currentSlide.title}` 
-      });
+      const newSlide: HeroSlide = {
+        id: Date.now().toString(),
+        url,
+        title: newSlideData.title,
+        subtitle: newSlideData.subtitle
+      };
 
-      setShowSlideModal(false);
-      toast.fire({ icon: 'success', title: 'Slide berhasil disimpan' });
-
-    } catch (error) {
-      console.error("Error saving slide:", error);
-      showAlert('Gagal', 'Gagal menyimpan slide.', 'error');
-    } finally {
-      setSlideLoading(false);
-    }
+      const updatedSlides = [...heroSlides, newSlide];
+      await set(getDBRef(tenantId, 'settings/heroSlides'), updatedSlides);
+      setHeroSlides(updatedSlides);
+      setNewSlideFile(null);
+      setNewSlideData({ title: '', subtitle: '' });
+      await logActivity(tenantId, { action: 'TAMBAH', target: 'SLIDESHOW', title: `Slide: ${newSlide.title}` });
+      toast.fire({ icon: 'success', title: 'Slide berhasil ditambahkan' });
+    } catch (err) { showAlert('Gagal', 'Gagal upload slide.', 'error'); } finally { setSaving(false); }
   };
 
   const handleDeleteSlide = async (id: string, title: string) => {
-    const result = await showConfirm('Hapus Slide?', `Slide "${title}" akan dihapus dari beranda.`);
-    if (result.isConfirmed) {
-      try {
-        const updatedSlides = settings.heroSlides.filter(s => s.id !== id);
-        setSettings(prev => ({ ...prev, heroSlides: updatedSlides }));
-        await set(getDBRef(tenantId, 'settings/heroSlides'), updatedSlides);
-
-        logActivity(tenantId, { action: 'HAPUS', target: 'SLIDESHOW', title: `Slide: ${title}` });
-        toast.fire({ icon: 'success', title: 'Slide dihapus' });
-      } catch (error) {
-        showAlert('Gagal', 'Gagal menghapus slide.', 'error');
-      }
+    if (!tenantId) return;
+    if ((await showConfirm('Hapus Slide?', title)).isConfirmed) {
+      const updated = heroSlides.filter(s => s.id !== id);
+      await set(getDBRef(tenantId, 'settings/heroSlides'), updated);
+      setHeroSlides(updated);
+      await logActivity(tenantId, { action: 'HAPUS', target: 'SLIDESHOW', title: `Slide: ${title}` });
     }
   };
 
-  const handleSaveSettings = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const handleSaveService = async () => {
+    if (!tenantId) return;
+    setSaving(true);
     try {
-      let logoUrl = settings.logo;
-      if (logoFile) {
-        const webpBlob = await convertToWebP(logoFile, 0.7);
-        const fileName = `logo_${Date.now()}.webp`;
-        const fileRef = getStorageRef(tenantId, `settings/logo/${fileName}`);
-        const uploadResult = await uploadBytes(fileRef, webpBlob);
-        logoUrl = await getDownloadURL(uploadResult.ref);
-      }
-
-      let hmPhotoUrl = settings.headmaster.photo;
-      if (hmFile) {
-        const webpBlob = await convertToWebP(hmFile, 0.7);
-        const fileName = `headmaster_${Date.now()}.webp`;
-        const fileRef = getStorageRef(tenantId, `settings/headmaster/${fileName}`);
-        const uploadResult = await uploadBytes(fileRef, webpBlob);
-        hmPhotoUrl = await getDownloadURL(uploadResult.ref);
-      }
-
-      const finalSettings = { 
-        ...settings, 
-        logo: logoUrl,
-        headmaster: { ...settings.headmaster, photo: hmPhotoUrl }
-      };
-      
-      await set(getDBRef(tenantId, 'settings'), finalSettings);
-      showAlert('Berhasil', 'Pengaturan berhasil disimpan!', 'success');
-      logActivity(tenantId, { action: 'EDIT', target: 'SETTINGS', title: 'Update Pengaturan' });
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      showAlert('Gagal', 'Gagal menyimpan pengaturan.', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // E-Service Handlers
-  const handleSaveEService = async () => {
-    if (!currentEService.title || !currentEService.url) {
-      return showAlert('Peringatan', 'Mohon isi nama dan URL layanan.', 'warning');
-    }
-    
-    try {
-      if (currentEService.id) {
-        await set(getDBRef(tenantId, `e_services/${currentEService.id}`), currentEService);
-        logActivity(tenantId, { action: 'EDIT', target: 'SETTINGS', title: `Update E-Layanan: ${currentEService.title}` });
+      if (currentService.id) {
+        await set(getDBRef(tenantId, `e_services/${currentService.id}`), currentService);
+        await logActivity(tenantId, { action: 'EDIT', target: 'SETTINGS', title: `Update Layanan: ${currentService.title}` });
       } else {
-        await push(getDBRef(tenantId, 'e_services'), currentEService);
+        const newRef = push(getDBRef(tenantId, 'e_services'));
+        await set(newRef, { ...currentService, id: newRef.key });
         await updateCounter(tenantId, 'totalEServices', 1);
-        logActivity(tenantId, { action: 'TAMBAH', target: 'SETTINGS', title: `Tambah E-Layanan: ${currentEService.title}` });
+        await logActivity(tenantId, { action: 'TAMBAH', target: 'SETTINGS', title: `Tambah Layanan: ${currentService.title}` });
       }
-      setShowEServiceModal(false);
+      setShowServiceModal(false);
       toast.fire({ icon: 'success', title: 'Layanan berhasil disimpan' });
-    } catch (error) {
-      showAlert('Gagal', 'Gagal menyimpan layanan.', 'error');
+    } catch (error) { 
+      console.error(error);
+      showAlert('Gagal', 'Gagal menyimpan layanan.', 'error'); 
+    } finally { 
+      setSaving(false); 
     }
   };
 
   const handleDeleteEService = async (id: string, title: string) => {
-    const result = await showConfirm('Hapus Layanan?', `Layanan "${title}" akan dihapus permanen.`);
-    if (result.isConfirmed) {
-      try {
-        await remove(getDBRef(tenantId, `e_services/${id}`));
-        await updateCounter(tenantId, 'totalEServices', -1);
-        logActivity(tenantId, { action: 'HAPUS', target: 'SETTINGS', title: `Hapus E-Layanan: ${title}` });
-        toast.fire({ icon: 'success', title: 'Layanan dihapus' });
-      } catch (error) {
-        showAlert('Gagal', 'Gagal menghapus layanan.', 'error');
-      }
+    if (!tenantId) return;
+    if ((await showConfirm('Hapus Layanan?', title)).isConfirmed) {
+      await remove(getDBRef(tenantId, `e_services/${id}`));
+      await updateCounter(tenantId, 'totalEServices', -1);
+      await logActivity(tenantId, { action: 'HAPUS', target: 'SETTINGS', title: `Hapus Layanan: ${title}` });
     }
   };
 
-  if (fetching) return <DashboardLayout><div className="text-center py-5"><Spinner animation="border" variant="success" /></div></DashboardLayout>;
+  const handleUpdateLayout = async (layout: 'bento' | 'slider') => {
+    if (!tenantId) return;
+    setSaving(true);
+    try {
+        await set(getDBRef(tenantId, 'settings/eServicesLayout'), layout);
+        setFormData(prev => ({ ...prev, eServicesLayout: layout }));
+        toast.fire({ icon: 'success', title: 'Layout diperbarui' });
+    } catch (err) { showAlert('Gagal', 'Gagal update layout.', 'error'); }
+    finally { setSaving(false); }
+  }
+
+  if (loading) return <DashboardLayout><div className="text-center py-5"><Spinner animation="border" variant="success" /></div></DashboardLayout>;
 
   return (
     <DashboardLayout>
-      <Container fluid className="p-0">
-        <Form onSubmit={handleSaveSettings}>
-          <div className="d-flex justify-content-between align-items-center mb-4">
-            <div>
-              <h4 className="fw-bold text-dark mb-1">Pengaturan {terms.school}</h4>
-              <p className="text-muted small mb-0">Kelola identitas dan tampilan website {terms.school.toLowerCase()} Anda.</p>
-            </div>
-            <Button type="submit" variant="success" className="px-4 py-2 fw-bold shadow-sm" disabled={loading}>
-              {loading ? <Spinner size="sm" className="me-2" /> : <FaSave className="me-2" />}
-              SIMPAN SEMUA PENGATURAN
-            </Button>
-          </div>
-
-          <Row>
-            <Col lg={8}>
-              <Card className="border-0 shadow-sm mb-4">
-                <Card.Header className="bg-white py-3 border-bottom">
-                  <h6 className="fw-bold mb-0 small">Identitas & Logo</h6>
+      <Container fluid className="p-0 pb-5">
+        <div className="d-flex justify-content-between align-items-center mb-4">
+           <h4 className="fw-bold text-dark mb-0">Pengaturan {terms.school}</h4>
+           {saving && <Badge bg="warning" className="text-dark border-0"><Spinner size="sm" className="me-1" /> Sedang Menyimpan...</Badge>}
+        </div>
+        
+        <Row>
+          {/* LEFT COLUMN: General Info, Logo, Headmaster */}
+          <Col lg={7}>
+             {/* 1. Profil & Logo Section */}
+             <Card className="border-0 shadow-sm mb-4 rounded-4">
+                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex align-items-center">
+                   <FaSchool className="me-2 text-success" /> Identitas Utama
                 </Card.Header>
-                <Card.Body className="p-4">
-                  <Row>
-                    <Col md={8}>
-                      <Form.Group className="mb-3">
-                        <Form.Label className="fw-bold small">Jenjang {terms.school}</Form.Label>
-                        <Form.Select name="level" value={settings.level} onChange={handleInputChange}>
-                          <option value="SD">SD (Sekolah Dasar)</option>
-                          <option value="MI">MI (Madrasah Ibtidaiyah)</option>
-                          <option value="SMP">SMP (Sekolah Menengah Pertama)</option>
-                          <option value="MTs">MTs (Madrasah Tsanawiyah)</option>
-                          <option value="SMA">SMA (Sekolah Menengah Atas)</option>
-                          <option value="SMK">SMK (Sekolah Menengah Kejuruan)</option>
-                          <option value="MA">MA (Madrasah Aliyah)</option>
-                        </Form.Select>
-                      </Form.Group>
-                      <Form.Group className="mb-3">
-                        <Form.Label className="fw-bold small">Nama {terms.school}</Form.Label>
-                        <Form.Control name="schoolName" value={settings.schoolName} onChange={handleInputChange} required placeholder={`Contoh: ${settings.level} Negeri 1 Garut`} />
-                      </Form.Group>
-                      <Form.Group className="mb-4">
-                        <Form.Label className="fw-bold small">Tagline / Motto</Form.Label>
-                        <Form.Control name="tagline" value={settings.tagline} onChange={handleInputChange} placeholder="Misal: Unggul, Religius, Berbudaya" />
-                      </Form.Group>
-                    </Col>
-                    <Col md={4} className="text-center">
-                      <Form.Label className="fw-bold small d-block">Logo {terms.school}</Form.Label>
-                      <div className="bg-light border rounded p-2 mb-2 mx-auto" style={{ width: '100px', height: '100px' }}>
-                        {logoPreview ? <img src={logoPreview} className="img-fluid h-100 object-fit-contain" alt="Logo" /> : <FaImage className="text-muted fs-2 mt-3" />}
+                <Card.Body className="p-4 pt-0">
+                   <Form onSubmit={handleSaveGeneral}>
+                      <Row className="align-items-center mb-4 bg-light p-3 rounded-4 mx-0 border">
+                         <Col md={4} className="text-center">
+                            <div className="mb-2 bg-white rounded-circle d-flex align-items-center justify-content-center border mx-auto shadow-sm" style={{ width: '120px', height: '120px', overflow: 'hidden' }}>
+                               {newLogoFile ? (
+                                  <img src={URL.createObjectURL(newLogoFile)} className="img-fluid p-2" alt="Preview" />
+                               ) : formData.logo ? (
+                                  <img src={formData.logo} className="img-fluid p-2" alt="Logo" />
+                               ) : (
+                                  <FaSchool className="text-muted fs-1" />
+                               )}
+                            </div>
+                            <input type="file" className="d-none" id="logo-upload" accept="image/png,image/jpeg" onChange={e => e.target.files && setNewLogoFile(e.target.files[0])} />
+                            <Button size="sm" variant="success" className="rounded-pill px-3 fw-bold" onClick={() => document.getElementById('logo-upload')?.click()}>Ganti Logo</Button>
+                         </Col>
+                         <Col md={8}>
+                            <Form.Group className="mb-3">
+                               <Form.Label className="x-small fw-bold text-muted">NAMA {terms.school.toUpperCase()}</Form.Label>
+                               <Form.Control value={formData.schoolName} onChange={e => setFormData({...formData, schoolName: e.target.value})} required className="fw-bold" />
+                            </Form.Group>
+                            <Form.Group className="mb-0">
+                               <Form.Label className="x-small fw-bold text-muted">TAGLINE / SLOGAN</Form.Label>
+                               <Form.Control value={formData.tagline} onChange={e => setFormData({...formData, tagline: e.target.value})} placeholder="Unggul dalam Prestasi..." />
+                            </Form.Group>
+                         </Col>
+                      </Row>
+
+                      <h6 className="fw-bold mb-3 mt-4 pt-2 border-top"><FaUserTie className="me-2 text-success" /> Profil {terms.headmaster}</h6>
+                      <Row>
+                         <Col md={8}>
+                            <Form.Group className="mb-3">
+                               <Form.Label className="x-small fw-bold text-muted">NAMA LENGKAP</Form.Label>
+                               <Form.Control value={formData.headmaster.name} onChange={e => setFormData({...formData, headmaster: {...formData.headmaster, name: e.target.value}})} />
+                            </Form.Group>
+                            <Form.Group className="mb-0">
+                               <Form.Label className="x-small fw-bold text-muted">SAMBUTAN SINGKAT</Form.Label>
+                               <Form.Control as="textarea" rows={5} value={formData.headmaster.greeting} onChange={e => setFormData({...formData, headmaster: {...formData.headmaster, greeting: e.target.value}})} style={{ fontSize: '0.9rem' }} />
+                            </Form.Group>
+                         </Col>
+                         <Col md={4}>
+                            <div className="text-center mt-3 mt-md-0">
+                               <Form.Label className="x-small fw-bold text-muted d-block text-start">FOTO PROFIL</Form.Label>
+                               <div className="mb-2 bg-light rounded-4 border mx-auto overflow-hidden shadow-sm" style={{ width: '100%', height: '180px' }}>
+                                  {headmasterPhotoFile ? (
+                                      <img src={URL.createObjectURL(headmasterPhotoFile)} className="img-fluid h-100 w-100 object-fit-cover" alt="" />
+                                  ) : formData.headmaster.photo ? (
+                                      <img src={formData.headmaster.photo} className="img-fluid h-100 w-100 object-fit-cover" alt="" />
+                                  ) : (
+                                      <FaUserTie className="text-muted mt-5 fs-1" />
+                                  )}
+                               </div>
+                               <input type="file" className="d-none" id="hm-photo" accept="image/*" onChange={e => e.target.files && setHeadmasterPhotoFile(e.target.files[0])} />
+                               <Button size="sm" variant="outline-success" className="rounded-pill w-100" onClick={() => document.getElementById('hm-photo')?.click()}>Ganti Foto</Button>
+                            </div>
+                         </Col>
+                      </Row>
+                      <hr className="my-4 opacity-50" />
+                      <Button type="submit" variant="success" className="px-5 py-2 fw-bold shadow rounded-pill" disabled={saving}>
+                         <FaSave className="me-2" /> Simpan Profil & Identitas
+                      </Button>
+                   </Form>
+                </Card.Body>
+             </Card>
+
+             {/* 2. E-Services Section Combined with Layout */}
+             <Card className="border-0 shadow-sm rounded-4">
+                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex justify-content-between align-items-center">
+                   <span><FaExternalLinkAlt className="me-2 text-primary" /> Layanan Digital (E-Services)</span>
+                   <Button size="sm" variant="primary" className="rounded-pill px-3 fw-bold" onClick={() => { setCurrentService({ title: '', url: '', bgColor: '#198754', textColor: '#ffffff', icon: '🚀', iconType: 'emoji' }); setShowServiceModal(true); }}>
+                      <FaPlus className="me-1" /> Tambah Item
+                   </Button>
+                </Card.Header>
+                <Card.Body className="p-4 pt-0">
+                   {/* Layout Selection Box */}
+                   <div className="bg-light p-3 rounded-4 mb-4 border border-primary border-opacity-10 shadow-sm">
+                      <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                         <div>
+                            <h6 className="fw-bold mb-1 text-dark small"><FaCogs className="me-1" /> Tampilan di Beranda</h6>
+                            <p className="x-small text-muted mb-0">Pilih bagaimana layanan ditampilkan kepada pengunjung.</p>
+                         </div>
+                         <div className="d-flex gap-3 bg-white p-2 rounded-pill border shadow-sm">
+                            <Form.Check type="radio" label="Bento Grid" name="layout" id="lay-bento" checked={formData.eServicesLayout === 'bento'} onChange={() => handleUpdateLayout('bento')} className="small fw-medium cursor-pointer" />
+                            <Form.Check type="radio" label="Slider" name="layout" id="lay-slider" checked={formData.eServicesLayout === 'slider'} onChange={() => handleUpdateLayout('slider')} className="small fw-medium cursor-pointer" />
+                         </div>
                       </div>
-                      <Form.Control type="file" id="logo-upload" className="d-none" onChange={handleLogoChange} accept="image/*" />
-                      <Button as="label" htmlFor="logo-upload" variant="outline-success" size="sm" className="pointer">Ubah Logo</Button>
-                    </Col>
-                  </Row>
-                </Card.Body>
-              </Card>
+                   </div>
 
-              <Card className="border-0 shadow-sm mb-4">
-                <Card.Header className="bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-                  <h6 className="fw-bold mb-0 small">Slide Show Beranda (Hero)</h6>
-                  <Button variant="outline-success" size="sm" className="d-flex align-items-center" onClick={() => handleSlideModalShow()}>
-                    <FaPlus className="me-2" /> Tambah Slide
-                  </Button>
-                </Card.Header>
-                <Card.Body className="p-0">
-                  <Table responsive hover className="mb-0 align-middle">
-                    <thead className="bg-light">
-                      <tr className="small text-muted">
-                        <th className="ps-4 border-0">GAMBAR</th>
-                        <th className="border-0">TEXT</th>
-                        <th className="text-end pe-4 border-0">AKSI</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {settings.heroSlides.length === 0 ? (
-                        <tr><td colSpan={3} className="text-center py-4 text-muted small">Belum ada slide.</td></tr>
-                      ) : (
-                        settings.heroSlides.map((slide) => (
-                          <tr key={slide.id}>
-                            <td className="ps-4 py-3">
-                              <img src={slide.url} className="rounded border" style={{ width: '100px', height: '60px', objectFit: 'cover' }} alt="" />
-                            </td>
-                            <td className="small">
-                              <div className="fw-bold">{slide.title}</div>
-                              <div className="text-muted truncate-1">{slide.subtitle}</div>
-                              {slide.link && <a href={slide.link} target="_blank" rel="noopener noreferrer" className="extra-small text-info text-decoration-none d-block truncate-1">{slide.link}</a>}
-                            </td>
-                            <td className="text-end pe-4">
-                              <Button variant="light" size="sm" className="btn-icon me-2" onClick={() => handleSlideModalShow(slide)}>
-                                <FaEdit size={12} />
-                              </Button>
-                              <Button variant="outline-danger" size="sm" onClick={() => handleDeleteSlide(slide.id, slide.title)}>
-                                <FaTrash size={12} />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </Table>
-                </Card.Body>
-              </Card>
-
-              <Card className="border-0 shadow-sm mb-4">
-                <Card.Header className="bg-white py-3 border-bottom">
-                  <h6 className="fw-bold mb-0 small">Tampilan & Tata Letak</h6>
-                </Card.Header>
-                <Card.Body className="p-4">
-                  <Form.Group>
-                    <Form.Label className="fw-bold small d-block mb-3">Pilih Layout Menu E-Layanan</Form.Label>
-                    <Row>
-                      <Col md={6}>
-                        <div 
-                          className={`p-3 border rounded-3 pointer position-relative ${settings.eServicesLayout === 'bento' ? 'border-primary bg-primary bg-opacity-10' : 'bg-light'}`}
-                          onClick={() => setSettings({...settings, eServicesLayout: 'bento'})}
-                        >
-                          <div className="d-flex align-items-center mb-2">
-                            <FaThLarge className={`me-2 ${settings.eServicesLayout === 'bento' ? 'text-primary' : 'text-muted'}`} />
-                            <h6 className="mb-0 small fw-bold">Bento Grid (Modern)</h6>
-                          </div>
-                          <p className="extra-small text-muted mb-0">Tampilan kotak bervariasi yang elegan dan premium. Cocok untuk menonjolkan satu layanan utama.</p>
-                          {settings.eServicesLayout === 'bento' && <div className="position-absolute top-0 end-0 p-2"><Badge bg="primary">Terpilih</Badge></div>}
-                        </div>
-                      </Col>
-                      <Col md={6}>
-                        <div 
-                          className={`p-3 border rounded-3 pointer position-relative ${settings.eServicesLayout === 'slider' ? 'border-primary bg-primary bg-opacity-10' : 'bg-light'}`}
-                          onClick={() => setSettings({...settings, eServicesLayout: 'slider'})}
-                        >
-                          <div className="d-flex align-items-center mb-2">
-                            <FaEllipsisH className={`me-2 ${settings.eServicesLayout === 'slider' ? 'text-primary' : 'text-muted'}`} />
-                            <h6 className="mb-0 small fw-bold">Menu Slider (Minimalis)</h6>
-                          </div>
-                          <p className="extra-small text-muted mb-0">Tampilan list horizontal yang bisa digeser. Hemat ruang dan sangat rapi.</p>
-                          {settings.eServicesLayout === 'slider' && <div className="position-absolute top-0 end-0 p-2"><Badge bg="primary">Terpilih</Badge></div>}
-                        </div>
-                      </Col>
-                    </Row>
-                  </Form.Group>
-                </Card.Body>
-              </Card>
-            </Col>
-            
-            <Col lg={4}>
-              <Card className="border-0 shadow-sm mb-4">
-                <Card.Header className="bg-white py-3 border-bottom">
-                  <h6 className="fw-bold mb-0 small">Profil {terms.headmaster}</h6>
-                </Card.Header>
-                <Card.Body className="p-4">
-                  <div className="text-center mb-4">
-                    <div className="bg-light border rounded-3 p-2 mb-3 mx-auto overflow-hidden" style={{ width: '150px', height: '180px' }}>
-                      {hmPreview ? (
-                        <img src={hmPreview} className="img-fluid h-100 w-100 object-fit-cover rounded" alt={terms.headmaster} />
-                      ) : (
-                        <div className="h-100 d-flex align-items-center justify-content-center flex-column text-muted">
-                          <FaUserTie size={50} className="mb-2" />
-                          <small>Belum ada foto</small>
-                        </div>
-                      )}
-                    </div>
-                    <Form.Control type="file" id="hm-upload" className="d-none" onChange={handleHmPhotoChange} accept="image/*" />
-                    <Button as="label" htmlFor="hm-upload" variant="outline-primary" size="sm" className="pointer px-3">Ganti Foto</Button>
-                  </div>
-
-                  <Form.Group className="mb-3">
-                    <Form.Label className="fw-bold small">Nama {terms.headmaster}</Form.Label>
-                    <Form.Control 
-                      name="hm_name" 
-                      value={settings.headmaster.name} 
-                      onChange={handleInputChange} 
-                      placeholder="Masukkan nama lengkap & gelar" 
-                    />
-                  </Form.Group>
-
-                  <Form.Group className="mb-3">
-                    <Form.Label className="fw-bold small">Sambutan / Greeting</Form.Label>
-                    <Form.Control 
-                      as="textarea" 
-                      rows={6} 
-                      name="hm_greeting" 
-                      value={settings.headmaster.greeting} 
-                      onChange={handleInputChange} 
-                      placeholder={`Tulis sambutan hangat untuk pengunjung website ${terms.school.toLowerCase()}...`} 
-                    />
-                  </Form.Group>
-                </Card.Body>
-              </Card>
-
-              <Card className="border-0 shadow-sm mb-4">
-                <Card.Header className="bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
-                  <h6 className="fw-bold mb-0 small">Manajemen E-Layanan</h6>
-                  <Button variant="outline-primary" size="sm" onClick={() => {
-                    setCurrentEService({ title: '', url: '', bgColor: '#198754', textColor: '#ffffff', icon: '🎓', iconType: 'emoji' });
-                    setShowEServiceModal(true);
-                  }}>
-                    <FaPlus size={10} />
-                  </Button>
-                </Card.Header>
-                <Card.Body className="p-3">
-                  {eServices.length === 0 ? (
-                    <div className="text-center py-3 text-muted extra-small">Belum ada layanan.</div>
-                  ) : (
-                    <div className="list-group list-group-flush">
-                      {eServices.map((svc) => (
-                        <div key={svc.id} className="list-group-item px-0 py-2 d-flex justify-content-between align-items-center border-0 border-bottom">
-                          <div className="d-flex align-items-center overflow-hidden">
-                            <span className="me-2 d-flex align-items-center" style={{ width: '24px', height: '24px' }}>
-                              <IconRenderer icon={svc.icon} type={svc.iconType || 'emoji'} size="1.2rem" />
-                            </span>
-                            <span className="small fw-bold text-truncate">{svc.title}</span>
-                          </div>
-                          <div className="d-flex gap-1">
-                            <Button variant="link" size="sm" className="p-0 text-muted" onClick={() => {
-                              setCurrentEService(svc);
-                              setShowEServiceModal(true);
-                            }}>Edit</Button>
-                            <Button variant="link" size="sm" className="p-0 text-danger" onClick={() => handleDeleteEService(svc.id, svc.title)}>Hapus</Button>
-                          </div>
-                        </div>
+                   <ListGroup variant="flush">
+                      {eServices.map(svc => (
+                         <ListGroup.Item key={svc.id} className="px-0 py-3 d-flex align-items-center justify-content-between bg-transparent border-bottom">
+                            <div className="d-flex align-items-center overflow-hidden">
+                               <div className="me-3 p-2 rounded-3 d-flex align-items-center justify-content-center shadow-sm border" style={{ backgroundColor: svc.bgColor, color: svc.textColor, width: '42px', height: '42px', flexShrink: 0 }}>
+                                  <IconRenderer icon={svc.icon} type={svc.iconType} />
+                               </div>
+                               <div className="overflow-hidden">
+                                  <div className="fw-bold small text-dark lh-1 mb-1">{svc.title}</div>
+                                  <code className="extra-small text-muted text-truncate d-block" style={{ fontSize: '0.65rem' }}>{svc.url}</code>
+                               </div>
+                            </div>
+                            <div className="d-flex gap-1 ms-2">
+                               <Button variant="light" size="sm" className="btn-icon" onClick={() => { setCurrentService(svc); setShowServiceModal(true); }}><FaEdit size={12} className="text-primary" /></Button>
+                               <Button variant="light" size="sm" className="btn-icon" onClick={() => handleDeleteEService(svc.id, svc.title)}><FaTrash size={12} className="text-danger" /></Button>
+                            </div>
+                         </ListGroup.Item>
                       ))}
-                    </div>
-                  )}
+                      {eServices.length === 0 && <div className="text-center py-4 text-muted small">Belum ada layanan yang ditambahkan.</div>}
+                   </ListGroup>
                 </Card.Body>
-              </Card>
-            </Col>
-          </Row>
-        </Form>
+             </Card>
+          </Col>
+
+          {/* RIGHT COLUMN: Slideshow */}
+          <Col lg={5}>
+             <Card className="border-0 shadow-sm mb-4 rounded-4 overflow-hidden">
+                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex justify-content-between align-items-center">
+                   <span><FaImage className="me-2 text-info" /> Slideshow Hero Utama</span>
+                   <Badge bg="info" className="text-white rounded-pill px-3">{heroSlides.length}/5</Badge>
+                </Card.Header>
+                <Card.Body className="p-4 pt-0">
+                   <div className="mb-4 p-3 bg-light rounded-4 border">
+                      <Form.Group className="mb-2">
+                         <Form.Label className="x-small fw-bold text-muted">JUDUL SLIDE</Form.Label>
+                         <Form.Control size="sm" placeholder="Teks Utama di Slider" value={newSlideData.title} onChange={e => setNewSlideData({...newSlideData, title: e.target.value})} />
+                      </Form.Group>
+                      <Form.Group className="mb-3">
+                         <Form.Label className="x-small fw-bold text-muted">SUB-JUDUL</Form.Label>
+                         <Form.Control size="sm" placeholder="Teks Penjelasan Kecil" value={newSlideData.subtitle} onChange={e => setNewSlideData({...newSlideData, subtitle: e.target.value})} />
+                      </Form.Group>
+                      <Form.Group className="mb-3">
+                         <Form.Label className="x-small fw-bold text-muted">GAMBAR SLIDE (1920x800)</Form.Label>
+                         <Form.Control size="sm" type="file" accept="image/*" onChange={e => (e.target as any).files && setNewSlideFile((e.target as any).files[0])} />
+                      </Form.Group>
+                      <Button size="sm" variant="info" className="text-white w-100 fw-bold rounded-pill shadow-sm" onClick={handleAddSlide} disabled={saving || !newSlideFile}>
+                         {saving ? <Spinner size="sm" /> : <><FaPlus className="me-1" /> Unggah Slide Baru</>}
+                      </Button>
+                   </div>
+                   
+                   <Row className="g-3">
+                      {heroSlides.map(slide => (
+                         <Col key={slide.id} xs={6}>
+                            <div className="position-relative group shadow-sm rounded-4 overflow-hidden border bg-white h-100">
+                               <img src={slide.url} style={{ width: '100%', height: '100px', objectFit: 'cover' }} alt="" />
+                               <div className="p-2">
+                                  <div className="fw-bold x-small text-truncate mb-1">{slide.title}</div>
+                                  <Button variant="outline-danger" size="sm" className="w-100 py-0 x-small" onClick={() => handleDeleteSlide(slide.id, slide.title)}>Hapus</Button>
+                               </div>
+                            </div>
+                         </Col>
+                      ))}
+                   </Row>
+                </Card.Body>
+             </Card>
+          </Col>
+        </Row>
       </Container>
 
-      {/* E-Service Modal */}
-      <Modal show={showEServiceModal} onHide={() => setShowEServiceModal(false)} centered size="lg">
-        <Modal.Header closeButton className="border-0 pb-0">
-          <Modal.Title className="fw-bold h5">{currentEService.id ? 'Edit Layanan' : 'Tambah Layanan Baru'}</Modal.Title>
-        </Modal.Header>
-        <Modal.Body className="p-4">
-          <Row>
-            <Col md={7}>
-              <Form.Group className="mb-3">
-                <Form.Label className="fw-bold small">Nama Layanan</Form.Label>
-                <Form.Control 
-                  value={currentEService.title} 
-                  onChange={(e) => setCurrentEService({...currentEService, title: e.target.value})} 
-                  placeholder="Misal: E-Learning, PPDB Online" 
-                />
-              </Form.Group>
-              <Form.Group className="mb-3">
-                <Form.Label className="fw-bold small">URL / Link Tujuan</Form.Label>
-                <Form.Control 
-                  value={currentEService.url} 
-                  onChange={(e) => setCurrentEService({...currentEService, url: e.target.value})} 
-                  placeholder="https://..." 
-                />
-              </Form.Group>
-              
-              <Row className="mb-3">
-                <Col xs={6}>
-                  <Form.Label className="fw-bold small">Warna Latar</Form.Label>
-                  <div className="d-flex align-items-center gap-2 border p-1 rounded bg-white">
-                    <Form.Control 
-                      type="color" 
-                      className="form-control-color border-0"
-                      value={currentEService.bgColor} 
-                      onChange={(e) => setCurrentEService({...currentEService, bgColor: e.target.value})}
-                      title="Pilih warna latar"
-                    />
-                    <small className="text-muted extra-small font-monospace text-uppercase">{currentEService.bgColor}</small>
-                  </div>
-                </Col>
-                <Col xs={6}>
-                  <Form.Label className="fw-bold small">Warna Teks</Form.Label>
-                  <div className="d-flex align-items-center gap-2 border p-1 rounded bg-white">
-                    <Form.Control 
-                      type="color" 
-                      className="form-control-color border-0"
-                      value={currentEService.textColor} 
-                      onChange={(e) => setCurrentEService({...currentEService, textColor: e.target.value})}
-                      title="Pilih warna teks"
-                    />
-                    <small className="text-muted extra-small font-monospace text-uppercase">{currentEService.textColor}</small>
-                  </div>
-                </Col>
-              </Row>
-            </Col>
-            
-            <Col md={5}>
-              <Form.Label className="fw-bold small d-block">Pilih Ikon Layanan</Form.Label>
-              <div className="border rounded bg-light overflow-hidden">
-                <Tab.Container defaultActiveKey={currentEService.iconType || 'emoji'}>
-                  <Nav variant="tabs" className="bg-white px-2 pt-2 border-0">
-                    <Nav.Item>
-                      <Nav.Link eventKey="emoji" className="px-3 py-2 small" onClick={() => setCurrentEService({...currentEService, iconType: 'emoji'})}><FaSmile /></Nav.Link>
-                    </Nav.Item>
-                    <Nav.Item>
-                      <Nav.Link eventKey="bi" className="px-3 py-2 small" onClick={() => setCurrentEService({...currentEService, iconType: 'bi'})}><FaBootstrap /></Nav.Link>
-                    </Nav.Item>
-                    <Nav.Item>
-                      <Nav.Link eventKey="fa" className="px-3 py-2 small" onClick={() => setCurrentEService({...currentEService, iconType: 'fa'})}><FaFontAwesome /></Nav.Link>
-                    </Nav.Item>
-                    <Nav.Item>
-                      <Nav.Link eventKey="hi" className="px-3 py-2 small" onClick={() => setCurrentEService({...currentEService, iconType: 'hi'})}><FaCode /></Nav.Link>
-                    </Nav.Item>
-                    <Nav.Item>
-                      <Nav.Link eventKey="fc" className="px-3 py-2 small" onClick={() => setCurrentEService({...currentEService, iconType: 'fc'})}><FaImage /></Nav.Link>
-                    </Nav.Item>
-                  </Nav>
-                  <Tab.Content className="p-3" style={{ height: '200px', overflowY: 'auto' }}>
-                    {Object.entries(iconSets).map(([type, icons]) => (
-                      <Tab.Pane key={type} eventKey={type}>
-                        <div className="emoji-grid">
-                          {icons.map((iconName, idx) => (
-                            <div 
-                              key={idx} 
-                              className={`emoji-item p-2 text-center pointer rounded d-flex align-items-center justify-content-center ${currentEService.icon === iconName ? 'bg-primary text-white' : ''}`}
-                              onClick={() => setCurrentEService({...currentEService, icon: iconName, iconType: type as any})}
-                              title={iconName}
-                            >
-                              <IconRenderer icon={iconName} type={type as any} size="1.4rem" />
-                            </div>
-                          ))}
-                        </div>
-                      </Tab.Pane>
-                    ))}
-                  </Tab.Content>
-                </Tab.Container>
-              </div>
-              <div className="text-center mt-3 p-2 border rounded bg-white shadow-sm">
-                <small className="text-muted d-block mb-1 Extra Small">Pratinjau Tampilan</small>
-                <div 
-                  className="rounded shadow-sm p-3 mx-auto d-flex flex-column align-items-center justify-content-center" 
-                  style={{ 
-                    backgroundColor: currentEService.bgColor, 
-                    color: currentEService.textColor,
-                    width: '100px',
-                    height: '100px'
-                  }}
-                >
-                  <div className="fs-3 mb-1 d-flex align-items-center">
-                    <IconRenderer icon={currentEService.icon || '🎓'} type={currentEService.iconType || 'emoji'} />
-                  </div>
-                  <div style={{ fontSize: '0.65rem', fontWeight: 'bold' }} className="text-truncate w-100">{currentEService.title || 'Judul'}</div>
-                </div>
-              </div>
-            </Col>
-          </Row>
-        </Modal.Body>
-        <Modal.Footer className="border-0 pt-0">
-          <Button variant="light" onClick={() => setShowEServiceModal(false)}>Batal</Button>
-          <Button variant="primary" onClick={handleSaveEService}>Simpan Layanan</Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Slide Modal */}
-      <Modal show={showSlideModal} onHide={() => setShowSlideModal(false)} centered size="lg">
-        <Form onSubmit={handleSaveSlide}>
-          <Modal.Header closeButton className="border-0 pb-0">
-            <Modal.Title className="fw-bold h5">{currentSlide.id ? 'Edit Slide' : 'Tambah Slide Baru'}</Modal.Title>
-          </Modal.Header>
-          <Modal.Body className="p-4">
+      {/* MODAL E-SERVICE */}
+      <Modal show={showServiceModal} onHide={() => setShowServiceModal(false)} centered size="lg" className="rounded-4">
+         <Modal.Header closeButton className="border-0 pb-0"><Modal.Title className="fw-bold h5">Kelola Item Layanan</Modal.Title></Modal.Header>
+         <Modal.Body className="p-4 pt-2">
+            <Form.Group className="mb-3">
+               <Form.Label className="small fw-bold text-muted">Nama Layanan</Form.Label>
+               <Form.Control value={currentService.title} onChange={e => setCurrentService({...currentService, title: e.target.value})} placeholder="E-Learning" />
+            </Form.Group>
+            <Form.Group className="mb-3">
+               <Form.Label className="small fw-bold text-muted">URL Link Tujuan</Form.Label>
+               <Form.Control value={currentService.url} onChange={e => setCurrentService({...currentService, url: e.target.value})} placeholder="https://..." />
+            </Form.Group>
             <Row>
-              <Col md={7}>
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-bold small">Judul Slide</Form.Label>
-                  <Form.Control 
-                    value={currentSlide.title} 
-                    onChange={(e) => setCurrentSlide({...currentSlide, title: e.target.value})}
-                    placeholder="Misal: Penerimaan Santri Baru"
-                    required
-                  />
-                </Form.Group>
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-bold small">Deskripsi Singkat</Form.Label>
-                  <Form.Control 
-                    as="textarea" 
-                    rows={3} 
-                    value={currentSlide.subtitle} 
-                    onChange={(e) => setCurrentSlide({...currentSlide, subtitle: e.target.value})}
-                    placeholder="Jelaskan singkat tentang slide ini"
-                    required
-                  />
-                </Form.Group>
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-bold small">URL Link (Opsional)</Form.Label>
-                  <Form.Control 
-                    type="url" 
-                    value={currentSlide.link} 
-                    onChange={(e) => setCurrentSlide({...currentSlide, link: e.target.value})}
-                    placeholder="https://domain.com/berita-terbaru"
-                  />
-                  <Form.Text className="text-muted">Link akan dibuka di tab baru.</Form.Text>
-                </Form.Group>
-              </Col>
-              <Col md={5} className="text-center">
-                <Form.Label className="fw-bold small d-block">Gambar Slide</Form.Label>
-                <div className="border rounded bg-light overflow-hidden mb-3">
-                  {slideImagePreview ? (
-                    <img src={slideImagePreview} className="img-fluid" style={{ maxHeight: '180px', width: '100%', objectFit: 'cover' }} alt="Preview" />
-                  ) : (
-                    <div className="p-5 text-muted"><FaImage size={50} /> <p className="small mb-0">Pilih gambar</p></div>
-                  )}
-                </div>
-                <Form.Control type="file" id="slide-image-upload" className="d-none" onChange={handleSlideImageChange} accept="image/*" />
-                <Button as="label" htmlFor="slide-image-upload" variant="outline-primary" size="sm" className="w-100">
-                  <FaCloudUploadAlt className="me-2" /> Upload Gambar Baru
-                </Button>
-              </Col>
+               <Col md={4}>
+                  <Form.Group className="mb-3">
+                     <Form.Label className="small fw-bold text-muted">Tipe Ikon</Form.Label>
+                     <Form.Select value={currentService.iconType} onChange={e => setCurrentService({...currentService, iconType: e.target.value as any, icon: iconOptions[e.target.value as keyof typeof iconOptions][0]})}>
+                        <option value="emoji">Emoji</option>
+                        <option value="fa">FontAwesome</option>
+                        <option value="bi">Bootstrap Icon</option>
+                        <option value="hi">Hero Icons</option>
+                        <option value="fc">Flat Color Icons</option>
+                     </Form.Select>
+                  </Form.Group>
+               </Col>
+               <Col md={8}>
+                  <Form.Group className="mb-3">
+                     <Form.Label className="small fw-bold text-muted">Pilih Ikon</Form.Label>
+                     <div className="icon-grid-selector d-flex flex-wrap gap-2 p-2 bg-light rounded border overflow-auto" style={{ maxHeight: '150px' }}>
+                        {iconOptions[currentService.iconType as keyof typeof iconOptions]?.map(iconName => (
+                           <div 
+                              key={iconName} 
+                              className={`icon-item p-2 rounded cursor-pointer border ${currentService.icon === iconName ? 'bg-success text-white border-success' : 'bg-white'}`}
+                              onClick={() => setCurrentService({...currentService, icon: iconName})}
+                              style={{ width: '45px', height: '45px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}
+                           >
+                              <IconRenderer icon={iconName} type={currentService.iconType as any} />
+                           </div>
+                        ))}
+                     </div>
+                  </Form.Group>
+               </Col>
+               <Col xs={12}>
+                  <Form.Group className="mb-3">
+                     <Form.Label className="small fw-bold text-muted">Warna Latar Belakang Ikon</Form.Label>
+                     <div className="d-flex gap-3 align-items-center">
+                        <Form.Control type="color" value={currentService.bgColor} onChange={e => setCurrentService({...currentService, bgColor: e.target.value})} style={{ width: '60px', height: '40px' }} />
+                        <div className="p-2 rounded flex-grow-1 text-center border fw-bold" style={{ backgroundColor: currentService.bgColor, color: '#fff', fontSize: '0.8rem' }}>
+                           <IconRenderer icon={currentService.icon!} type={currentService.iconType as any} className="me-2" />
+                           Preview Tampilan
+                        </div>
+                     </div>
+                  </Form.Group>
+               </Col>
             </Row>
-          </Modal.Body>
-          <Modal.Footer className="border-0 pt-0">
-            <Button variant="light" onClick={() => setShowSlideModal(false)}>Batal</Button>
-            <Button type="submit" variant="primary" disabled={slideLoading}>
-              {slideLoading ? <Spinner size="sm" className="me-2" /> : <FaSave className="me-2" />} Simpan Slide
-            </Button>
-          </Modal.Footer>
-        </Form>
+         </Modal.Body>
+         <Modal.Footer className="border-0 pt-0">
+            <Button variant="light" className="rounded-pill px-4 fw-bold" onClick={() => setShowServiceModal(false)}>Batal</Button>
+            <Button variant="primary" className="rounded-pill px-4 fw-bold" onClick={handleSaveService} disabled={saving}>Simpan Perubahan</Button>
+         </Modal.Footer>
       </Modal>
 
       <style>{`
-        .extra-small { font-size: 0.75rem; }
-        .truncate-1 { display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
-        .pointer { cursor: pointer; }
-        .emoji-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(40px, 1fr));
-          gap: 5px;
-        }
-        .emoji-item:hover:not(.bg-primary) {
-          background-color: #f0f2f5;
-        }
-        .nav-tabs .nav-link { border: 1px solid transparent; color: #6c757d; }
-        .nav-tabs .nav-link.active { background-color: transparent; border-bottom: 2px solid var(--bs-primary); color: var(--bs-primary); font-weight: bold; }
-        .form-control-color { width: 40px; height: 30px; padding: 0; }
+        .x-small { font-size: 0.7rem; }
+        .extra-small { font-size: 0.65rem; }
+        .btn-icon { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #eee; }
+        .cursor-pointer { cursor: pointer; }
+        .icon-item:hover { transform: scale(1.1); border-color: #198754; }
       `}</style>
     </DashboardLayout>
   );

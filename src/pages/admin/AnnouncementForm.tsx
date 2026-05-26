@@ -4,9 +4,10 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { FaSave, FaArrowLeft } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
-import { getDBRef, logActivity, updateCounter } from '../../firebase/utils';
-import { push, set, onValue, serverTimestamp } from 'firebase/database';
+import { getDBRef, logActivity, updateTimeStats } from '../../firebase/utils';
+import { onValue, serverTimestamp, ref as dbRef, update } from 'firebase/database';
 import { showAlert, toast } from '../../utils/alerts';
+import { rtdb as database } from '../../firebase/config';
 
 const AnnouncementForm: React.FC = () => {
   const { tenantId } = useTenant();
@@ -23,11 +24,16 @@ const AnnouncementForm: React.FC = () => {
   
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
+  const [originalDate, setOriginalDate] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isEdit) {
+    if (isEdit && tenantId) {
       onValue(getDBRef(tenantId, `announcements/${id}`), (snap) => {
-        if (snap.val()) setFormData(snap.val());
+        if (snap.val()) {
+          const data = snap.val();
+          setFormData(data);
+          setOriginalDate(data.date);
+        }
         setFetching(false);
       }, { onlyOnce: true });
     }
@@ -35,8 +41,11 @@ const AnnouncementForm: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tenantId) return;
     setLoading(true);
     try {
+      const updates: any = {};
+      
       const data = {
         ...formData,
         updatedAt: serverTimestamp(),
@@ -46,15 +55,31 @@ const AnnouncementForm: React.FC = () => {
         deleted: false
       };
 
+      const searchIndexData = {
+        t: formData.title.toLowerCase(),
+        title: formData.title,
+        date: formData.date,
+        deleted: false
+      };
+
       if (isEdit) {
-        await set(getDBRef(tenantId, `announcements/${id}`), { ...data, createdAt: serverTimestamp() });
+        updates[`tenants/${tenantId}/announcements/${id}`] = { ...data, createdAt: serverTimestamp() };
+        updates[`tenants/${tenantId}/announcement_search_index/${id}`] = searchIndexData;
+
+        if (originalDate && originalDate !== formData.date) {
+          await updateTimeStats(tenantId, 'announcement', originalDate, -1);
+          await updateTimeStats(tenantId, 'announcement', formData.date, 1);
+        }
         await logActivity(tenantId, { action: 'EDIT', target: 'PENGUMUMAN', title: formData.title });
       } else {
-        const newRef = push(getDBRef(tenantId, 'announcements'));
-        await set(newRef, { ...data, createdAt: serverTimestamp() });
-        await updateCounter(tenantId, 'totalAnnouncements', 1);
+        const timestampId = Date.now().toString();
+        updates[`tenants/${tenantId}/announcements/${timestampId}`] = { ...data, createdAt: serverTimestamp() };
+        updates[`tenants/${tenantId}/announcement_search_index/${timestampId}`] = searchIndexData;
+        await updateTimeStats(tenantId, 'announcement', formData.date, 1);
         await logActivity(tenantId, { action: 'TAMBAH', target: 'PENGUMUMAN', title: formData.title });
       }
+      
+      await update(dbRef(database), updates);
       toast.fire({ icon: 'success', title: 'Pengumuman berhasil disimpan' });
       navigate('/dashboard/pengumuman');
     } catch (error) {
