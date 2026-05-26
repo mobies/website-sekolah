@@ -23,6 +23,7 @@ const NewsForm: React.FC = () => {
     status: 'published' as 'published' | 'draft',
     date: new Date().toISOString().split('T')[0],
     imageUrl: '',
+    coverObjectFit: 'cover' as 'cover' | 'contain' | 'fill',
   });
   
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -63,7 +64,7 @@ const NewsForm: React.FC = () => {
     if (!tenantId) return;
     setLoading(true);
     try {
-      let thumbnailUrl = formData.imageUrl;
+      let thumbnailUrl = formData.thumbnail || formData.imageUrl || '';
 
       if (imageFile) {
         const fileName = `${Date.now()}_${imageFile.name}`;
@@ -178,13 +179,22 @@ const NewsForm: React.FC = () => {
               </Card>
 
               <Card className="border-0 shadow-sm">
-                <Card.Body className="p-4 text-center">
+                <Card.Body className="p-4">
                   <Form.Label className="fw-bold small d-block text-start mb-3">Gambar Sampul</Form.Label>
                   <div className="mb-3 bg-light rounded d-flex align-items-center justify-content-center border" style={{ height: '200px', overflow: 'hidden' }}>
-                    {imagePreview ? <img src={imagePreview} className="img-fluid" alt="" /> : <FaCloudUploadAlt className="text-muted fs-1" />}
+                    {imagePreview ? <img src={imagePreview} style={{ width: '100%', height: '100%', objectFit: formData.coverObjectFit }} alt="" /> : <FaCloudUploadAlt className="text-muted fs-1" />}
                   </div>
                   <input type="file" id="news-img" className="d-none" accept="image/*" onChange={handleImageChange} />
-                  <Button onClick={() => document.getElementById('news-img')?.click()} variant="outline-success" size="sm" className="w-100">Pilih Gambar</Button>
+                  <Button onClick={() => document.getElementById('news-img')?.click()} variant="outline-success" size="sm" className="w-100 mb-3">Pilih Gambar</Button>
+                  
+                  <Form.Group>
+                    <Form.Label className="fw-bold small text-muted">Tampilan Gambar</Form.Label>
+                    <Form.Select size="sm" value={formData.coverObjectFit} onChange={(e) => setFormData({...formData, coverObjectFit: e.target.value as any})}>
+                      <option value="cover">Cover</option>
+                      <option value="contain">Contain</option>
+                      <option value="fill">Fill</option>
+                    </Form.Select>
+                  </Form.Group>
                 </Card.Body>
               </Card>
             </Col>

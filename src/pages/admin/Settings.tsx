@@ -15,6 +15,7 @@ interface HeroSlide {
   url: string;
   title: string;
   subtitle: string;
+  objectFit: 'cover' | 'contain' | 'fill';
 }
 
 interface EService {
@@ -80,6 +81,10 @@ const Settings: React.FC = () => {
   const [currentService, setCurrentService] = useState<Partial<EService>>({
      title: '', url: '', bgColor: '#198754', textColor: '#ffffff', icon: '🚀', iconType: 'emoji'
   });
+
+  // Slide Edit Modal
+  const [showSlideModal, setShowSlideModal] = useState(false);
+  const [currentSlide, setCurrentSlide] = useState<Partial<HeroSlide>>({});
 
   // Profile Modal State
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -187,7 +192,8 @@ const Settings: React.FC = () => {
         id: Date.now().toString(),
         url,
         title: newSlideData.title,
-        subtitle: newSlideData.subtitle
+        subtitle: newSlideData.subtitle,
+        objectFit: 'cover' // Default value
       };
 
       const updatedSlides = [...heroSlides, newSlide];
@@ -209,6 +215,23 @@ const Settings: React.FC = () => {
       await logActivity(tenantId, { action: 'HAPUS', target: 'SLIDESHOW', title: `Slide: ${title}` });
     }
   };
+
+  const handleSaveSlide = async () => {
+    if (!tenantId || !currentSlide.id) return;
+    setSaving(true);
+    try {
+      const updatedSlides = heroSlides.map(s => s.id === currentSlide.id ? currentSlide as HeroSlide : s);
+      await set(getDBRef(tenantId, 'settings/heroSlides'), updatedSlides);
+      setHeroSlides(updatedSlides);
+      setShowSlideModal(false);
+      await logActivity(tenantId, { action: 'EDIT', target: 'SLIDESHOW', title: `Slide: ${currentSlide.title}` });
+      toast.fire({ icon: 'success', title: 'Slide berhasil diperbarui' });
+    } catch(err) {
+      showAlert('Gagal', 'Gagal menyimpan perubahan slide.', 'error');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const handleSaveService = async () => {
     if (!tenantId) return;
@@ -526,8 +549,9 @@ const Settings: React.FC = () => {
                          <Col key={slide.id} md={4}>
                             <Card className="group shadow-sm rounded-4 overflow-hidden border-0 h-100 bg-white">
                                <div className="position-relative">
-                                  <img src={slide.url} style={{ width: '100%', height: '180px', objectFit: 'cover' }} alt="" />
-                                  <div className="position-absolute top-0 end-0 p-2">
+                                  <img src={slide.url} style={{ width: '100%', height: '180px', objectFit: slide.objectFit || 'cover' }} alt="" />
+                                  <div className="position-absolute top-0 end-0 p-2 d-flex gap-2">
+                                     <Button variant="light" size="sm" className="rounded-circle btn-icon shadow" onClick={() => { setCurrentSlide(slide); setShowSlideModal(true); }}><FaEdit size={12} /></Button>
                                      <Button variant="danger" size="sm" className="rounded-circle btn-icon shadow" onClick={() => handleDeleteSlide(slide.id, slide.title)}><FaTrash size={12} /></Button>
                                   </div>
                                </div>
@@ -591,6 +615,46 @@ const Settings: React.FC = () => {
           </Tab>
         </Tabs>
       </Container>
+
+      {/* MODAL EDIT SLIDE */}
+      <Modal show={showSlideModal} onHide={() => setShowSlideModal(false)} centered>
+        <Modal.Header closeButton className="border-0">
+          <Modal.Title className="h5 fw-bold">Edit Slide</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group className="mb-3">
+            <Form.Label className="small fw-bold text-muted">Judul</Form.Label>
+            <Form.Control 
+              value={currentSlide.title} 
+              onChange={e => setCurrentSlide({...currentSlide, title: e.target.value})}
+            />
+          </Form.Group>
+          <Form.Group className="mb-3">
+            <Form.Label className="small fw-bold text-muted">Sub-Judul</Form.Label>
+            <Form.Control 
+              value={currentSlide.subtitle} 
+              onChange={e => setCurrentSlide({...currentSlide, subtitle: e.target.value})}
+            />
+          </Form.Group>
+          <Form.Group className="mb-3">
+            <Form.Label className="small fw-bold text-muted">Tipe Tampilan Gambar (Object Fit)</Form.Label>
+            <Form.Select
+              value={currentSlide.objectFit}
+              onChange={e => setCurrentSlide({...currentSlide, objectFit: e.target.value as any})}
+            >
+              <option value="cover">Cover (Memenuhi frame, mungkin terpotong)</option>
+              <option value="contain">Contain (Gambar utuh, mungkin ada space)</option>
+              <option value="fill">Fill (Memenuhi frame, gambar terdistorsi)</option>
+            </Form.Select>
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer className="border-0">
+          <Button variant="light" className="rounded-pill px-4" onClick={() => setShowSlideModal(false)}>Batal</Button>
+          <Button variant="primary" className="rounded-pill px-4" onClick={handleSaveSlide} disabled={saving}>
+            {saving ? <Spinner size="sm"/> : 'Simpan Perubahan'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
 
       {/* MODAL E-SERVICE */}
       <Modal show={showServiceModal} onHide={() => setShowServiceModal(false)} centered size="lg" className="rounded-4">

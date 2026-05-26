@@ -59,6 +59,7 @@ const Hero: React.FC = () => {
                   left: 0, 
                   width: '100%', 
                   height: '100%',
+                  objectFit: slide.objectFit || 'cover',
                   zIndex: 0
                 }}
                 placeholderColor="#212529"

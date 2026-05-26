@@ -205,7 +205,7 @@ const NewsListPublic: React.FC = () => {
                           <span className="badge bg-success-subtle text-success x-small text-uppercase">{item.c || 'Berita'}</span>
                           <small className="text-muted" style={{ fontSize: '0.75rem' }}>{new Date(item.date).toLocaleDateString('id-ID')}</small>
                         </div>
-                        <h6 className="fw-bold mb-0">{item.title}</h6>
+                        <h6 className="fw-bold mb-0" style={{ fontSize: '0.8rem' }}>{item.title}</h6>
                       </div>
                       <i className="bi bi-chevron-right text-success opacity-50"></i>
                     </div>
@@ -219,7 +219,12 @@ const NewsListPublic: React.FC = () => {
                     <div className="row g-0">
                       <div className="col-md-4">
                         <div style={{ height: '180px' }}>
-                          <ProgressiveImage src={news.thumbnail || news.imageUrl || 'https://images.unsplash.com/photo-1585829365234-781f8c484dca?q=80&w=400&h=250&fit=crop'} alt={news.title} className="w-100 h-100" style={{ objectFit: 'cover' }} />
+                          <ProgressiveImage 
+                              src={news.thumbnail || news.imageUrl || 'https://images.unsplash.com/photo-1585829365234-781f8c484dca?q=80&w=400&h=250&fit=crop'} 
+                              alt={news.title} 
+                              className="w-100 h-100" 
+                              style={{ objectFit: news.coverObjectFit || 'cover' }} 
+                            />
                         </div>
                       </div>
                       <div className="col-md-8">

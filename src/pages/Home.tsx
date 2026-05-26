@@ -18,6 +18,7 @@ interface NewsItem {
   thumbnail: string;
   deleted?: boolean;
   status?: string;
+  coverObjectFit?: 'cover' | 'contain' | 'fill';
 }
 
 interface AgendaItem {
@@ -68,14 +69,14 @@ const Home: React.FC = () => {
       setLoading(false);
     });
 
-    // 2. News
+    // 2. News (Fetch 4 items)
     onValue(getDBRef(tenantId, 'news'), (snap) => {
       const data = snap.val();
       if (data) {
         const list = Object.keys(data).map(key => ({ id: key, ...data[key] }))
           .filter(item => !item.deleted && item.status === 'published')
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-          .slice(0, 3);
+          .slice(0, 4);
         setNews(list);
       }
     });
@@ -139,12 +140,16 @@ const Home: React.FC = () => {
           </div>
           <Row>
             {news.map((item) => (
-              <Col key={item.id} md={4} className="mb-4">
-                <Card className="h-100 shadow-sm border-0 hover-lift">
-                  <ProgressiveImage src={item.thumbnail || 'https://via.placeholder.com/400x250'} style={{ height: '200px' }} alt={item.title} />
+              <Col key={item.id} xs={12} sm={6} md={6} lg={4} xl={3} className="mb-4 d-flex">
+                <Card className="h-100 shadow-sm border-0 hover-lift w-100">
+                  <ProgressiveImage 
+                    src={item.thumbnail || 'https://via.placeholder.com/400x250'} 
+                    style={{ height: '200px', objectFit: item.coverObjectFit || 'cover' }} 
+                    alt={item.title} 
+                  />
                   <Card.Body className="d-flex flex-column">
                     <Card.Text className="text-success small mb-1 fw-bold text-uppercase">{item.category}</Card.Text>
-                    <Card.Title className="fw-bold h5 mb-3">{item.title}</Card.Title>
+                    <Card.Title className="fw-bold h6 mb-3">{item.title}</Card.Title>
                     <div className="d-flex justify-content-between align-items-center mt-auto pt-3 border-top">
                       <small className="text-muted">{new Date(item.date).toLocaleDateString('id-ID')}</small>
                       <Link to={`/berita/${item.id}`} className="text-success fw-bold small text-decoration-none">Selengkapnya</Link>

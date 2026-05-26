@@ -142,7 +142,7 @@ const NewsDetail: React.FC = () => {
         <div className="col-lg-10">
           <div className="card shadow-sm border-0 mb-5 rounded-4 overflow-hidden">
             {news.thumbnail || news.imageUrl ? (
-              <img src={news.thumbnail || news.imageUrl} className="card-img-top" alt={news.title} style={{ maxHeight: '600px', objectFit: 'cover' }} />
+              <img src={news.thumbnail || news.imageUrl} className="card-img-top" alt={news.title} style={{ maxHeight: '600px', objectFit: news.coverObjectFit || 'cover' }} />
             ) : null}
             <div className="card-body p-4 p-md-5">
               <div className="mb-3">
@@ -150,7 +150,7 @@ const NewsDetail: React.FC = () => {
                   {news.category || 'Berita'}
                 </span>
               </div>
-              <h1 className="fw-bold mb-3 display-5 text-dark">{news.title}</h1>
+              <h1 className="fw-bold mb-3 display-6 text-dark">{news.title}</h1>
               
               {/* Simplified Share Button */}
               <div className="mb-4 pb-3 border-bottom">
@@ -231,4 +231,6 @@ const NewsDetail: React.FC = () => {
   );
 };
 
+
 export default NewsDetail;
+
