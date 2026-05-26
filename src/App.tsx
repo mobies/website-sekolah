@@ -29,6 +29,7 @@ import VideoList from './pages/admin/VideoList';
 import VideoForm from './pages/admin/VideoForm';
 import StaffList from './pages/admin/StaffList';
 import StaffForm from './pages/admin/StaffForm';
+import MessageList from './pages/admin/MessageList';
 import Settings from './pages/admin/Settings';
 import OwnerDashboard from './pages/OwnerDashboard';
 import OwnerLogin from './pages/OwnerLogin';
@@ -102,6 +103,7 @@ const AppContent = () => {
           <Route path="/dashboard/staff" element={<ProtectedRoute redirectTo="/admin-login"><StaffList /></ProtectedRoute>} />
           <Route path="/dashboard/staff/tambah" element={<ProtectedRoute redirectTo="/admin-login"><StaffForm /></ProtectedRoute>} />
           <Route path="/dashboard/staff/edit/:id" element={<ProtectedRoute redirectTo="/admin-login"><StaffForm /></ProtectedRoute>} />
+          <Route path="/dashboard/messages" element={<ProtectedRoute redirectTo="/admin-login"><MessageList /></ProtectedRoute>} />
           <Route path="/dashboard/settings" element={<ProtectedRoute redirectTo="/admin-login"><Settings /></ProtectedRoute>} />
           
           <Route path="*" element={<Home />} />

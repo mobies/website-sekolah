@@ -58,6 +58,7 @@ const Sidebar: React.FC = () => {
     { path: '/dashboard/agenda', icon: <FaCalendarAlt />, label: 'Agenda' },
     { path: '/dashboard/pengumuman', icon: <FaBullhorn />, label: 'Pengumuman' },
     { path: '/dashboard/staff', icon: <FaUsers />, label: 'Guru & Staf' },
+    { path: '/dashboard/messages', icon: <FaEnvelope />, label: 'Pesan' },
     { 
       label: 'Galeri',
       icon: <FaImages />,

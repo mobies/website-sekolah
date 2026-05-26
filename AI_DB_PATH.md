@@ -11,7 +11,9 @@
 - `tenants/{tenantId}/e_services`: Menyimpan daftar layanan digital (link eksternal) beserta metadata ikon dan warna untuk ditampilkan di menu dan beranda.
 - `tenants/{tenantId}/staff/{id}`: Menyimpan data guru dan staf (Nama, Foto, Jenis Kepegawaian, Mapel, Status Aktif).
 - `tenants/{tenantId}/staff_search_index/{id}`: Index pencarian guru & staf (Nama lowercase, jenis).
-- `tenants/{tenantId}/messages/{id}`: Pesan/masukan dari pengunjung melalui form kontak.
+- `tenants/{tenantId}/messages/{id}`: Pesan/masukan dari pengunjung. Berisi: `uid`, `authEmail`, `authName`, `inputName`, `subject`, `message`, `createdAt`, `isRead`, `reply` (opsional).
+- `tenants/{tenantId}/messages`: Perlu index pada `uid` untuk filter "Pesan Saya" dan `createdAt` untuk admin.
+- `tenants/{tenantId}/user_message_meta/{uid}`: Metadata per user untuk pembatasan pengiriman pesan (misal: `lastSentAt`).
 
 ## Firebase Storage Paths
 

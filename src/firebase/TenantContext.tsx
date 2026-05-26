@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { onValue } from 'firebase/database';
+import { getDBRef } from './utils';
 
 interface Terminology {
   school: string;     // Sekolah or Madrasah
@@ -49,6 +51,32 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setIsDefault(hostname.includes('localhost') || hostname.includes('127.0.0.1'));
     }, 100);
   }, []);
+
+  // Update Document Title & Favicon from Database Settings
+  useEffect(() => {
+    if (!tenantId) return;
+
+    const settingsRef = getDBRef(tenantId, 'settings');
+    const unsubscribe = onValue(settingsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        if (data.schoolName) {
+          document.title = data.schoolName;
+        }
+        if (data.logo) {
+          let link: HTMLLinkElement | null = document.querySelector("link[rel~='icon']");
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+          }
+          link.href = data.logo;
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [tenantId]);
 
   const getStoragePath = (path: string) => tenantId ? `${tenantId}/${path.startsWith('/') ? path.slice(1) : path}` : '';
   const getDatabasePath = (path: string) => tenantId ? `tenants/${tenantId}/${path.startsWith('/') ? path.slice(1) : path}` : '';

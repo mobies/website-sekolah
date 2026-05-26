@@ -44,7 +44,7 @@ const Header: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
 
-  const verifyAdmin = async (u: User, tId: string) => {
+  const verifyAdmin = async (tId: string) => {
     setVerifying(true);
     try {
       const verifyRole = httpsCallable(functions, 'verifyAdminRole');
@@ -72,7 +72,7 @@ const Header: React.FC = () => {
         if (verified) {
           setIsAdmin(true);
         } else {
-          verifyAdmin(currentUser, tenantId);
+          verifyAdmin(tenantId);
         }
       } else {
         setIsAdmin(false);
@@ -89,7 +89,7 @@ const Header: React.FC = () => {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
         toast.fire({ icon: 'success', title: 'Berhasil masuk' });
-        await verifyAdmin(result.user, tenantId);
+        await verifyAdmin(tenantId);
       }
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {
