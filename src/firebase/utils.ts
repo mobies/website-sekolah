@@ -12,8 +12,8 @@ export const getDBRef = (tenantId: string, path: string) => {
 };
 
 export const logActivity = async (tenantId: string, data: {
-  action: 'TAMBAH' | 'EDIT' | 'HAPUS' | 'RESTORE' | 'PULIHKAN',
-  target: 'BERITA' | 'AGENDA' | 'PENGUMUMAN' | 'GALERI' | 'SETTINGS' | 'SLIDESHOW' | 'VIDEO',
+  action: 'TAMBAH' | 'EDIT' | 'HAPUS' | 'RESTORE' | 'PULIHKAN' | 'HAPUS_PERMANEN' | 'UBAH_STATUS',
+  target: 'BERITA' | 'AGENDA' | 'PENGUMUMAN' | 'GALERI' | 'SETTINGS' | 'SLIDESHOW' | 'VIDEO' | 'PROFIL' | 'STAFF',
   title: string
 }) => {
   try {

@@ -12,6 +12,8 @@ import AgendaDetail from './pages/AgendaDetail';
 import AnnouncementListPublic from './pages/AnnouncementListPublic';
 import AnnouncementDetail from './pages/AnnouncementDetail';
 import VideoGallery from './pages/VideoGallery';
+import GalleryListPublic from './pages/GalleryListPublic';
+import GalleryDetailPublic from './pages/GalleryDetailPublic';
 import StaffListPublic from './pages/StaffListPublic';
 import AdminDashboard from './pages/AdminDashboard';
 import NewsList from './pages/admin/NewsList';
@@ -59,6 +61,8 @@ const AppContent = () => {
           <Route path="/pengumuman" element={<AnnouncementListPublic />} />
           <Route path="/pengumuman/:id" element={<AnnouncementDetail />} />
           <Route path="/video" element={<VideoGallery />} />
+          <Route path="/galeri" element={<GalleryListPublic />} />
+          <Route path="/galeri/:id" element={<GalleryDetailPublic />} />
           <Route path="/guru-dan-staf" element={<StaffListPublic />} />
           
           {/* Public Login/Register Routes */}

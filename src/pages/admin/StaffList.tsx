@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Container, Card, Button, Row, Col, Spinner, Badge } from 'react-bootstrap';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FaPlus, FaEdit, FaTrash, FaUndo, FaCheckCircle, FaTimesCircle, FaSync, FaUserTie } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaUndo, FaCheckCircle, FaTimesCircle, FaUserTie } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import ProgressiveImage from '../../components/ProgressiveImage';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef, logActivity, getStorageRef } from '../../firebase/utils';
 import { update, ref, query, orderByChild, limitToLast, endAt, get, onValue, remove } from 'firebase/database';
 import { rtdb as database } from '../../firebase/config';
-import { storage } from '../../firebase/config';
+
 import { deleteObject } from 'firebase/storage';
 import { showConfirm, toast, showAlert } from '../../utils/alerts';
 
@@ -157,7 +157,6 @@ const StaffList: React.FC = () => {
     const result = await showConfirm(
       'Hapus Permanen?',
       `Anda yakin ingin menghapus data "${item.name}" secara permanen? Tindakan ini tidak dapat dibatalkan.`,
-      'warning',
       'Hapus Permanen'
     );
     if (result.isConfirmed) {

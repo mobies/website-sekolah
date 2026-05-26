@@ -11,7 +11,7 @@ import { convertToWebP } from '../../firebase/imageUtils';
 import { showAlert, toast } from '../../utils/alerts';
 
 const StaffForm: React.FC = () => {
-  const { tenantId, terms } = useTenant();
+  const { tenantId } = useTenant();
   const { id } = useParams();
   const navigate = useNavigate();
   

@@ -4,8 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { FaUserTie, FaSearch } from 'react-icons/fa';
 import ProgressiveImage from '../components/ProgressiveImage';
 import { useTenant } from '../firebase/TenantContext';
-import { getDBRef } from '../firebase/utils';
-import { ref, query, orderByChild, limitToLast, endAt, get, onValue } from 'firebase/database';
+import { ref, query, orderByChild, limitToLast, endAt, get } from 'firebase/database';
 import { rtdb as database } from '../firebase/config';
 
 interface StaffItem {

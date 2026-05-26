@@ -16,7 +16,7 @@ interface ProfileData {
 
 const ProfileDetail: React.FC = () => {
   const { slug } = useParams();
-  const { tenantId, terms } = useTenant();
+  const { tenantId } = useTenant();
   const navigate = useNavigate();
   
   const [profile, setProfile] = useState<ProfileData | null>(null);
