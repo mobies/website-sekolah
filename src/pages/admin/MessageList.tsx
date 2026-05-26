@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Container, Card, Button, Table, Spinner, Badge, Modal, Form } from 'react-bootstrap';
 import { useLocation } from 'react-router-dom';
-import { FaTrash, FaCheckCircle, FaReply, FaEnvelopeOpenText } from 'react-icons/fa';
+import { FaTrash, FaReply, FaPaperPlane } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef, logActivity } from '../../firebase/utils';
-import { onValue, update, ref, query, orderByChild, limitToLast, endAt, get, remove } from 'firebase/database';
+import { update, ref, query, orderByChild, limitToLast, endAt, get, remove } from 'firebase/database';
 import { rtdb as database } from '../../firebase/config';
 import { showConfirm, toast, showAlert } from '../../utils/alerts';
 

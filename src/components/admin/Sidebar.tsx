@@ -8,6 +8,7 @@ import {
   FaImages, 
   FaBullhorn, 
   FaUsers,
+  FaEnvelope,
   FaUserCog,
   FaSignOutAlt,
   FaChevronDown,

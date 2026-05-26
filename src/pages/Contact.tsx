@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Breadcrumb, Spinner, Form, Button, Badge, ListGroup, Tab, Tabs } from 'react-bootstrap';
+import { Container, Row, Col, Card, Breadcrumb, Spinner, Form, Button, Badge, ListGroup } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useTenant } from '../firebase/TenantContext';
 import { getDBRef } from '../firebase/utils';
@@ -9,7 +9,7 @@ import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { showAlert, toast } from '../utils/alerts';
-import { auth, rtdb } from '../firebase/config';
+import { auth } from '../firebase/config';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 
 // Fix default icon issues
