@@ -8,7 +8,9 @@ import {
   FaImages, 
   FaBullhorn, 
   FaUserCog,
-  FaSignOutAlt
+  FaSignOutAlt,
+  FaChevronDown,
+  FaChevronRight
 } from 'react-icons/fa';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef } from '../../firebase/utils';
@@ -23,21 +25,30 @@ const Sidebar: React.FC = () => {
   const { tenantId } = useTenant();
   const [schoolName, setSchoolName] = useState('MTsN 1 Garut');
   const [logo, setLogo] = useState('/logo.png');
+  const [openMenus, setOpenMenus] = useState<string[]>(['Galeri']); // Default open Galeri
 
   const handleLogout = async () => {
     await signOut(auth);
     navigate('/admin-login');
   };
 
+  const toggleMenu = (label: string) => {
+    setOpenMenus(prev => 
+      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
+    );
+  };
+
   useEffect(() => {
+    if (!tenantId) return;
     const settingsRef = getDBRef(tenantId, 'settings');
-    onValue(settingsRef, (snapshot) => {
+    const unsubscribe = onValue(settingsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         if (data.schoolName) setSchoolName(data.schoolName);
         if (data.logo) setLogo(data.logo);
       }
     });
+    return () => unsubscribe();
   }, [tenantId]);
 
   const menuItems = [
@@ -45,7 +56,14 @@ const Sidebar: React.FC = () => {
     { path: '/dashboard/berita', icon: <FaNewspaper />, label: 'Berita' },
     { path: '/dashboard/agenda', icon: <FaCalendarAlt />, label: 'Agenda' },
     { path: '/dashboard/pengumuman', icon: <FaBullhorn />, label: 'Pengumuman' },
-    { path: '/dashboard/galeri', icon: <FaImages />, label: 'Galeri' },
+    { 
+      label: 'Galeri',
+      icon: <FaImages />,
+      subItems: [
+        { path: '/dashboard/galeri', label: 'Album Foto' },
+        { path: '/dashboard/galeri/video', label: 'Video' }
+      ]
+    },
     { divider: true },
     { path: '/dashboard/settings', icon: <FaUserCog />, label: 'Settings' },
   ];
@@ -64,8 +82,45 @@ const Sidebar: React.FC = () => {
       
       <div className="flex-grow-1 p-3 overflow-auto">
         <Nav className="flex-column">
-          {menuItems.map((item, idx) => (
-            item.divider ? <hr key={`div-${idx}`} className="my-2" /> : (
+          {menuItems.map((item, idx) => {
+            if (item.divider) return <hr key={`div-${idx}`} className="my-2" />;
+
+            if (item.subItems) {
+              const isOpen = openMenus.includes(item.label);
+              const isActive = item.subItems.some(sub => location.pathname === sub.path);
+
+              return (
+                <div key={`group-${item.label}`} className="mb-1">
+                  <div 
+                    onClick={() => toggleMenu(item.label)}
+                    className={`sidebar-link d-flex align-items-center rounded-3 px-3 py-2 border-0 pointer ${isActive ? 'text-success' : ''}`}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <span className="me-3 fs-5 d-flex align-items-center">{item.icon}</span>
+                    <span className="fw-medium flex-grow-1">{item.label}</span>
+                    {isOpen ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />}
+                  </div>
+                  {isOpen && (
+                    <div className="ms-4 mt-1 border-start ps-2">
+                      {item.subItems.map(sub => (
+                        <Nav.Link
+                          key={sub.path}
+                          as={Link}
+                          to={sub.path}
+                          className={`sidebar-link mb-1 d-flex align-items-center rounded-3 px-3 py-2 border-0 small ${
+                            location.pathname === sub.path ? 'active' : ''
+                          }`}
+                        >
+                          <span className="fw-medium">{sub.label}</span>
+                        </Nav.Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
               <Nav.Link
                 key={item.path}
                 as={Link}
@@ -77,8 +132,8 @@ const Sidebar: React.FC = () => {
                 <span className="me-3 fs-5 d-flex align-items-center">{item.icon}</span>
                 <span className="fw-medium">{item.label}</span>
               </Nav.Link>
-            )
-          ))}
+            );
+          })}
         </Nav>
       </div>
 
@@ -99,9 +154,10 @@ const Sidebar: React.FC = () => {
 
       <style>{`
         .sidebar-link { color: #6c757d; transition: all 0.2s ease; text-decoration: none; }
-        .sidebar-link:hover { background-color: #f8f9fa; color: var(--mt-primary); }
-        .sidebar-link.active { background-color: #e8f5e9; color: var(--mt-primary); }
+        .sidebar-link:hover { background-color: #f8f9fa; color: #198754; }
+        .sidebar-link.active { background-color: #e8f5e9; color: #198754; }
         .extra-small { font-size: 0.75rem; }
+        .pointer { cursor: pointer; }
       `}</style>
     </div>
   );

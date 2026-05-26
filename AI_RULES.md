@@ -57,5 +57,12 @@ Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website M
 ## 11. Bahasa chat (Wajib)
 - **Bahasa yang digunakan:** Gunakan bahasa indonesia dalam berkomunikasi dan menyampaikan output. Gunakan bahasa singkat dan padat tapi jelas untuk menghemat token output.
 
+## 12. Deteksi Bug & Kualitas Kode (Wajib)
+- **TypeScript Check:** Selalu jalankan `npx tsc --noEmit` secara rutin setelah melakukan perubahan kode yang signifikan atau sebelum menyatakan tugas selesai. Ini bertujuan untuk mendeteksi error sintaksis, kesalahan tipe data, atau referensi yang hilang lebih awal guna menjaga stabilitas aplikasi.
+
+## 13. Penanganan Error & Stabilitas (Wajib)
+- **Preservasi UI/Alur:** Jika menemukan error saat build atau runtime, perbaiki error tersebut tanpa mengubah tampilan (UI) atau alur logika yang sudah ada kecuali diminta.
+- **Dilarang Destruktif:** Jangan melakukan perubahan radikal yang membuat aplikasi menjadi kacau, acak-acakan, atau kehilangan fitur yang sudah berfungsi sebelumnya. Fokus pada perbaikan teknis yang presisi.
+
 ---
 *Aturan ini bersifat mengikat dan harus diperiksa sebelum melakukan perubahan signifikan pada codebase.*

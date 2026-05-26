@@ -3,6 +3,15 @@ import { TenantProvider } from './firebase/TenantContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import Home from './pages/Home';
+import Contact from './pages/Contact';
+import ProfileDetail from './pages/ProfileDetail';
+import NewsDetail from './pages/NewsDetail';
+import NewsListPublic from './pages/NewsListPublic';
+import AgendaListPublic from './pages/AgendaListPublic';
+import AgendaDetail from './pages/AgendaDetail';
+import AnnouncementListPublic from './pages/AnnouncementListPublic';
+import AnnouncementDetail from './pages/AnnouncementDetail';
+import VideoGallery from './pages/VideoGallery';
 import AdminDashboard from './pages/AdminDashboard';
 import NewsList from './pages/admin/NewsList';
 import NewsForm from './pages/admin/NewsForm';
@@ -13,6 +22,8 @@ import AgendaForm from './pages/admin/AgendaForm';
 import GalleryList from './pages/admin/GalleryList';
 import GalleryForm from './pages/admin/GalleryForm';
 import PhotoManager from './pages/admin/PhotoManager';
+import VideoList from './pages/admin/VideoList';
+import VideoForm from './pages/admin/VideoForm';
 import Settings from './pages/admin/Settings';
 import OwnerDashboard from './pages/OwnerDashboard';
 import OwnerLogin from './pages/OwnerLogin';
@@ -35,6 +46,16 @@ const AppContent = () => {
       <main className="flex-grow-1">
         <Routes>
           <Route path="/" element={<Home />} />
+          <Route path="/profil/:slug" element={<ProfileDetail />} />
+          <Route path="/kontak" element={<Contact />} />
+          <Route path="/berita" element={<NewsListPublic />} />
+          <Route path="/berita/:id" element={<NewsDetail />} />
+          <Route path="/berita/:id/:slug" element={<NewsDetail />} />
+          <Route path="/agenda" element={<AgendaListPublic />} />
+          <Route path="/agenda/:id" element={<AgendaDetail />} />
+          <Route path="/pengumuman" element={<AnnouncementListPublic />} />
+          <Route path="/pengumuman/:id" element={<AnnouncementDetail />} />
+          <Route path="/video" element={<VideoGallery />} />
           
           {/* Public Login/Register Routes */}
           <Route path="/owner-login" element={<OwnerLogin />} />
@@ -67,6 +88,9 @@ const AppContent = () => {
           <Route path="/dashboard/galeri/tambah" element={<ProtectedRoute redirectTo="/admin-login"><GalleryForm /></ProtectedRoute>} />
           <Route path="/dashboard/galeri/edit/:id" element={<ProtectedRoute redirectTo="/admin-login"><GalleryForm /></ProtectedRoute>} />
           <Route path="/dashboard/galeri/kelola/:albumId" element={<ProtectedRoute redirectTo="/admin-login"><PhotoManager /></ProtectedRoute>} />
+          <Route path="/dashboard/galeri/video" element={<ProtectedRoute redirectTo="/admin-login"><VideoList /></ProtectedRoute>} />
+          <Route path="/dashboard/galeri/video/tambah" element={<ProtectedRoute redirectTo="/admin-login"><VideoForm /></ProtectedRoute>} />
+          <Route path="/dashboard/galeri/video/edit/:id" element={<ProtectedRoute redirectTo="/admin-login"><VideoForm /></ProtectedRoute>} />
           <Route path="/dashboard/settings" element={<ProtectedRoute redirectTo="/admin-login"><Settings /></ProtectedRoute>} />
           
           <Route path="*" element={<Home />} />

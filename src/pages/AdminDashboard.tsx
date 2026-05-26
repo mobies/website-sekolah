@@ -14,10 +14,7 @@ import {
 } from 'react-icons/fa';
 import { useTenant } from '../firebase/TenantContext';
 import { getDBRef } from '../firebase/utils';
-import { onValue, query, limitToLast, get, ref } from 'firebase/database';
-import { auth, rtdb } from '../firebase/config';
-import { signOut } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
+import { onValue, query, limitToLast } from 'firebase/database';
 
 interface ActivityLog {
   id: string;
@@ -29,7 +26,6 @@ interface ActivityLog {
 
 const AdminDashboard: React.FC = () => {
   const { tenantId, terms } = useTenant();
-  const navigate = useNavigate(); // Pastikan didefinisikan di sini
   const [stats, setStats] = useState({
     totalNews: 0,
     totalAgendas: 0,
@@ -43,36 +39,15 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (!tenantId) return;
 
-    const forceLogout = async () => {
-      await signOut(auth);
-      navigate('/admin-login');
-    };
-
-    // Security Check
-    const checkAuth = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        navigate('/admin-login');
-        return;
-      }
-      const settingsRef = ref(rtdb, `tenants/${tenantId}/settings`);
-      const snapshot = await get(settingsRef);
-      const settings = snapshot.val();
-      if (!settings || settings.adminUid !== user.uid) {
-        forceLogout();
-      }
-    };
-    checkAuth();
-
     // 1. Fetch Stats
     const statsRef = getDBRef(tenantId, 'stats');
-    onValue(statsRef, (snap) => {
+    const unsubscribeStats = onValue(statsRef, (snap) => {
       if (snap.val()) setStats(snap.val());
     });
 
     // 2. Fetch Last 10 Logs
     const logsRef = query(getDBRef(tenantId, 'logs'), limitToLast(10));
-    onValue(logsRef, (snap) => {
+    const unsubscribeLogs = onValue(logsRef, (snap) => {
       const data = snap.val();
       if (data) {
         const list = Object.keys(data).map(key => ({
@@ -83,6 +58,11 @@ const AdminDashboard: React.FC = () => {
       }
       setLoading(false);
     });
+
+    return () => {
+      unsubscribeStats();
+      unsubscribeLogs();
+    };
   }, [tenantId]);
 
   const statCards = [

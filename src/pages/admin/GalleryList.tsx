@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Container, Card, Button, Table } from 'react-bootstrap';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { FaPlus, FaEdit, FaTrash, FaUndo, FaImages } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
@@ -19,6 +19,9 @@ interface Album {
 
 const GalleryList: React.FC = () => {
   const { tenantId, terms } = useTenant();
+  const location = useLocation();
+  const q = new URLSearchParams(location.search).get('q') || '';
+  
   const [albums, setAlbums] = useState<Album[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDeleted, setShowDeleted] = useState(false);
@@ -49,7 +52,16 @@ const GalleryList: React.FC = () => {
     return () => unsubscribe();
   }, [tenantId]);
 
-  const filteredAlbums = albums.filter(item => !!item.deleted === showDeleted);
+  const filteredAlbums = useMemo(() => {
+    let list = albums.filter(item => !!item.deleted === showDeleted);
+    if (q) {
+      list = list.filter(item => 
+        item.title.toLowerCase().includes(q.toLowerCase()) || 
+        item.description.toLowerCase().includes(q.toLowerCase())
+      );
+    }
+    return list;
+  }, [albums, showDeleted, q]);
 
   const handleDelete = async (album: Album) => {
     if (!tenantId) return;

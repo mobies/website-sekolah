@@ -9,7 +9,8 @@
         },
         "news": {
           ".read": true,
-          ".write": "auth != null"
+          ".write": "auth != null",
+          ".indexOn": ["date"]
         },
         "agenda": {
           ".read": true,

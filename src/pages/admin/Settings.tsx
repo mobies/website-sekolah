@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Form, Button, Row, Col, Spinner, ListGroup, Modal, Badge } from 'react-bootstrap';
-import { FaSave, FaTrash, FaPlus, FaSchool, FaImage, FaUserTie, FaExternalLinkAlt, FaEdit, FaCogs } from 'react-icons/fa';
+import { Container, Card, Form, Button, Row, Col, Spinner, ListGroup, Modal, Badge, Tabs, Tab } from 'react-bootstrap';
+import { FaSave, FaTrash, FaPlus, FaSchool, FaImage, FaUserTie, FaExternalLinkAlt, FaEdit, FaCogs, FaHistory, FaCheckCircle, FaTimesCircle, FaEye, FaPhone, FaEnvelope, FaMapMarkerAlt, FaLocationArrow, FaFacebook, FaInstagram, FaYoutube } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef, getStorageRef, logActivity, updateCounter } from '../../firebase/utils';
@@ -8,6 +8,19 @@ import { onValue, set, push, remove } from 'firebase/database';
 import { uploadBytes, getDownloadURL } from 'firebase/storage';
 import { showAlert, toast, showConfirm } from '../../utils/alerts';
 import IconRenderer from '../../components/IconRenderer';
+import LocationMapPicker from '../../components/LocationMapPicker';
+
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix default icon issues with Webpack/Vite
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 
 interface HeroSlide {
   id: string;
@@ -26,10 +39,21 @@ interface EService {
   iconType: 'emoji' | 'fa' | 'bi' | 'hi' | 'fc';
 }
 
+interface ProfileContent {
+  id: string;
+  title: string;
+  slug: string;
+  content: string;
+  isActive: boolean;
+  order: number;
+}
+
 const Settings: React.FC = () => {
   const { tenantId, terms } = useTenant();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('general');
+  const [activeSubTab, setActiveSubTab] = useState('identity');
 
   // Core Settings State
   const [formData, setFormData] = useState({
@@ -37,11 +61,25 @@ const Settings: React.FC = () => {
     tagline: '',
     logo: '',
     eServicesLayout: 'bento' as 'bento' | 'slider',
-    headmaster: { name: '', photo: '', greeting: '' }
+    headmaster: { name: '', photo: '', greeting: '' },
+    contact: {
+      phone: '',
+      email: '',
+      address: '',
+      lat: '',
+      lng: ''
+    },
+    socialMedia: {
+      facebook: '',
+      instagram: '',
+      youtube: '',
+      twitter: ''
+    }
   });
 
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>([]);
   const [eServices, setEServices] = useState<EService[]>([]);
+  const [profiles, setProfiles] = useState<ProfileContent[]>([]);
   
   // File Upload States
   const [newLogoFile, setNewLogoFile] = useState<File | null>(null);
@@ -53,6 +91,12 @@ const Settings: React.FC = () => {
   const [showServiceModal, setShowServiceModal] = useState(false);
   const [currentService, setCurrentService] = useState<Partial<EService>>({
      title: '', url: '', bgColor: '#198754', textColor: '#ffffff', icon: '🚀', iconType: 'emoji'
+  });
+
+  // Profile Modal State
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [currentProfile, setCurrentProfile] = useState<Partial<ProfileContent>>({
+    title: '', content: '', isActive: true, order: 0
   });
 
   // Icon Lists
@@ -76,7 +120,9 @@ const Settings: React.FC = () => {
           tagline: data.tagline || '',
           logo: data.logo || '',
           eServicesLayout: data.eServicesLayout || 'bento',
-          headmaster: data.headmaster || { name: '', photo: '', greeting: '' }
+          headmaster: data.headmaster || { name: '', photo: '', greeting: '' },
+          contact: data.contact || { phone: '', email: '', address: '', lat: '', lng: '' },
+          socialMedia: data.socialMedia || { facebook: '', instagram: '', youtube: '', twitter: '' }
         });
         if (data.heroSlides) setHeroSlides(data.heroSlides);
       }
@@ -91,7 +137,17 @@ const Settings: React.FC = () => {
       } else setEServices([]);
     });
 
-    return () => { unsubSettings(); unsubServices(); };
+    // 3. Dynamic Profiles
+    const unsubProfiles = onValue(getDBRef(tenantId, 'profiles'), (snap) => {
+      const data = snap.val();
+      if (data) {
+        setProfiles(Object.keys(data)
+          .map(key => ({ id: key, ...data[key] }))
+          .sort((a, b) => a.order - b.order));
+      } else setProfiles([]);
+    });
+
+    return () => { unsubSettings(); unsubServices(); unsubProfiles(); };
   }, [tenantId]);
 
   const handleSaveGeneral = async (e: React.FormEvent) => {
@@ -120,14 +176,14 @@ const Settings: React.FC = () => {
       };
 
       await set(getDBRef(tenantId, 'settings'), { ...updatedData, heroSlides });
-      await logActivity(tenantId, { action: 'EDIT', target: 'SETTINGS', title: 'Update Profil & Logo' });
+      await logActivity(tenantId, { action: 'EDIT', target: 'SETTINGS', title: 'Update Profil & Identitas Utama' });
       
       setNewLogoFile(null);
       setHeadmasterPhotoFile(null);
-      toast.fire({ icon: 'success', title: 'Pengaturan umum berhasil disimpan' });
+      toast.fire({ icon: 'success', title: 'Pengaturan berhasil disimpan' });
     } catch (err) { 
       console.error(err);
-      showAlert('Gagal', 'Gagal menyimpan pengaturan umum.', 'error');
+      showAlert('Gagal', 'Gagal menyimpan pengaturan.', 'error');
     } finally { setSaving(false); }
   };
 
@@ -198,6 +254,41 @@ const Settings: React.FC = () => {
     }
   };
 
+  const handleSaveProfile = async () => {
+    if (!tenantId || !currentProfile.title) return;
+    setSaving(true);
+    try {
+      const slug = currentProfile.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, '');
+      const data = { ...currentProfile, slug };
+      
+      if (currentProfile.id) {
+        await set(getDBRef(tenantId, `profiles/${currentProfile.id}`), data);
+        await logActivity(tenantId, { action: 'EDIT', target: 'PROFIL', title: `Update: ${data.title}` });
+      } else {
+        const newRef = push(getDBRef(tenantId, 'profiles'));
+        await set(newRef, { ...data, id: newRef.key, order: profiles.length });
+        await logActivity(tenantId, { action: 'TAMBAH', target: 'PROFIL', title: `Tambah: ${data.title}` });
+      }
+      setShowProfileModal(false);
+      toast.fire({ icon: 'success', title: 'Konten profil berhasil disimpan' });
+    } catch (err) { showAlert('Gagal', 'Gagal menyimpan konten profil.', 'error'); }
+    finally { setSaving(false); }
+  };
+
+  const handleDeleteProfile = async (id: string, title: string) => {
+    if (!tenantId) return;
+    if ((await showConfirm('Hapus Konten Profil?', `Menghapus "${title}" juga akan menghilangkan menu ini dari halaman publik.`)).isConfirmed) {
+      await remove(getDBRef(tenantId, `profiles/${id}`));
+      await logActivity(tenantId, { action: 'HAPUS', target: 'PROFIL', title: `Hapus: ${title}` });
+    }
+  };
+
+  const toggleProfileStatus = async (item: ProfileContent) => {
+    if (!tenantId) return;
+    await set(getDBRef(tenantId, `profiles/${item.id}/isActive`), !item.isActive);
+    toast.fire({ icon: 'info', title: `Status ${item.title} diperbarui` });
+  };
+
   const handleUpdateLayout = async (layout: 'bento' | 'slider') => {
     if (!tenantId) return;
     setSaving(true);
@@ -218,90 +309,262 @@ const Settings: React.FC = () => {
            <h4 className="fw-bold text-dark mb-0">Pengaturan {terms.school}</h4>
            {saving && <Badge bg="warning" className="text-dark border-0"><Spinner size="sm" className="me-1" /> Sedang Menyimpan...</Badge>}
         </div>
-        
-        <Row>
-          {/* LEFT COLUMN: General Info, Logo, Headmaster */}
-          <Col lg={7}>
-             {/* 1. Profil & Logo Section */}
-             <Card className="border-0 shadow-sm mb-4 rounded-4">
-                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex align-items-center">
-                   <FaSchool className="me-2 text-success" /> Identitas Utama
-                </Card.Header>
-                <Card.Body className="p-4 pt-0">
-                   <Form onSubmit={handleSaveGeneral}>
-                      <Row className="align-items-center mb-4 bg-light p-3 rounded-4 mx-0 border">
-                         <Col md={4} className="text-center">
-                            <div className="mb-2 bg-white rounded-circle d-flex align-items-center justify-content-center border mx-auto shadow-sm" style={{ width: '120px', height: '120px', overflow: 'hidden' }}>
-                               {newLogoFile ? (
-                                  <img src={URL.createObjectURL(newLogoFile)} className="img-fluid p-2" alt="Preview" />
-                               ) : formData.logo ? (
-                                  <img src={formData.logo} className="img-fluid p-2" alt="Logo" />
-                               ) : (
-                                  <FaSchool className="text-muted fs-1" />
-                               )}
-                            </div>
-                            <input type="file" className="d-none" id="logo-upload" accept="image/png,image/jpeg" onChange={e => e.target.files && setNewLogoFile(e.target.files[0])} />
-                            <Button size="sm" variant="success" className="rounded-pill px-3 fw-bold" onClick={() => document.getElementById('logo-upload')?.click()}>Ganti Logo</Button>
-                         </Col>
-                         <Col md={8}>
-                            <Form.Group className="mb-3">
-                               <Form.Label className="x-small fw-bold text-muted">NAMA {terms.school.toUpperCase()}</Form.Label>
-                               <Form.Control value={formData.schoolName} onChange={e => setFormData({...formData, schoolName: e.target.value})} required className="fw-bold" />
-                            </Form.Group>
-                            <Form.Group className="mb-0">
-                               <Form.Label className="x-small fw-bold text-muted">TAGLINE / SLOGAN</Form.Label>
-                               <Form.Control value={formData.tagline} onChange={e => setFormData({...formData, tagline: e.target.value})} placeholder="Unggul dalam Prestasi..." />
-                            </Form.Group>
-                         </Col>
-                      </Row>
 
-                      <h6 className="fw-bold mb-3 mt-4 pt-2 border-top"><FaUserTie className="me-2 text-success" /> Profil {terms.headmaster}</h6>
-                      <Row>
-                         <Col md={8}>
-                            <Form.Group className="mb-3">
-                               <Form.Label className="x-small fw-bold text-muted">NAMA LENGKAP</Form.Label>
-                               <Form.Control value={formData.headmaster.name} onChange={e => setFormData({...formData, headmaster: {...formData.headmaster, name: e.target.value}})} />
-                            </Form.Group>
-                            <Form.Group className="mb-0">
-                               <Form.Label className="x-small fw-bold text-muted">SAMBUTAN SINGKAT</Form.Label>
-                               <Form.Control as="textarea" rows={5} value={formData.headmaster.greeting} onChange={e => setFormData({...formData, headmaster: {...formData.headmaster, greeting: e.target.value}})} style={{ fontSize: '0.9rem' }} />
-                            </Form.Group>
-                         </Col>
-                         <Col md={4}>
-                            <div className="text-center mt-3 mt-md-0">
-                               <Form.Label className="x-small fw-bold text-muted d-block text-start">FOTO PROFIL</Form.Label>
-                               <div className="mb-2 bg-light rounded-4 border mx-auto overflow-hidden shadow-sm" style={{ width: '100%', height: '180px' }}>
-                                  {headmasterPhotoFile ? (
-                                      <img src={URL.createObjectURL(headmasterPhotoFile)} className="img-fluid h-100 w-100 object-fit-cover" alt="" />
-                                  ) : formData.headmaster.photo ? (
-                                      <img src={formData.headmaster.photo} className="img-fluid h-100 w-100 object-fit-cover" alt="" />
+        <Tabs activeKey={activeTab} onSelect={(k) => setActiveTab(k || 'general')} className="mb-4 custom-tabs border-0">
+          <Tab eventKey="general" title={<><FaSchool className="me-2" /> Identitas & Profil</>}>
+             <Card className="border-0 shadow-sm mb-4 rounded-4">
+                <Card.Body className="p-4">
+                   {/* SUB-TABS NAVIGATION */}
+                   <div className="d-flex gap-2 mb-4 bg-light p-2 rounded-3 sub-nav-container overflow-auto">
+                      <Button variant={activeSubTab === 'identity' ? 'success' : 'light'} size="sm" className="rounded-pill px-3 fw-bold flex-shrink-0" onClick={() => setActiveSubTab('identity')}><FaSchool className="me-2" /> Identitas Utama</Button>
+                      <Button variant={activeSubTab === 'headmaster' ? 'success' : 'light'} size="sm" className="rounded-pill px-3 fw-bold flex-shrink-0" onClick={() => setActiveSubTab('headmaster')}><FaUserTie className="me-2" /> Profil {terms.headmaster}</Button>
+                      <Button variant={activeSubTab === 'school' ? 'success' : 'light'} size="sm" className="rounded-pill px-3 fw-bold flex-shrink-0" onClick={() => setActiveSubTab('school')}><FaHistory className="me-2" /> Detail Konten Sekolah</Button>
+                      <Button variant={activeSubTab === 'contact' ? 'success' : 'light'} size="sm" className="rounded-pill px-3 fw-bold flex-shrink-0" onClick={() => setActiveSubTab('contact')}><FaPhone className="me-2" /> Detail Kontak</Button>
+                   </div>
+
+                   {activeSubTab === 'identity' && (
+                      <Form onSubmit={handleSaveGeneral} className="animate-fade-in">
+                         <h6 className="fw-bold mb-4 text-success border-start border-3 border-success ps-2">Identitas Utama & Logo</h6>
+                         <Row className="align-items-center mb-4">
+                            <Col md={3} className="text-center">
+                               <div className="mb-3 bg-white rounded-circle d-flex align-items-center justify-content-center border mx-auto shadow-sm" style={{ width: '150px', height: '150px', overflow: 'hidden' }}>
+                                  {newLogoFile ? (
+                                     <img src={URL.createObjectURL(newLogoFile)} className="img-fluid p-2" alt="Preview" />
+                                  ) : formData.logo ? (
+                                     <img src={formData.logo} className="img-fluid p-2" alt="Logo" />
                                   ) : (
-                                      <FaUserTie className="text-muted mt-5 fs-1" />
+                                     <FaSchool className="text-muted fs-1" />
                                   )}
                                </div>
-                               <input type="file" className="d-none" id="hm-photo" accept="image/*" onChange={e => e.target.files && setHeadmasterPhotoFile(e.target.files[0])} />
-                               <Button size="sm" variant="outline-success" className="rounded-pill w-100" onClick={() => document.getElementById('hm-photo')?.click()}>Ganti Foto</Button>
-                            </div>
-                         </Col>
-                      </Row>
-                      <hr className="my-4 opacity-50" />
-                      <Button type="submit" variant="success" className="px-5 py-2 fw-bold shadow rounded-pill" disabled={saving}>
-                         <FaSave className="me-2" /> Simpan Profil & Identitas
-                      </Button>
-                   </Form>
+                               <input type="file" className="d-none" id="logo-upload" accept="image/png,image/jpeg" onChange={e => e.target.files && setNewLogoFile(e.target.files[0])} />
+                               <Button size="sm" variant="outline-success" className="rounded-pill px-3 fw-bold" onClick={() => document.getElementById('logo-upload')?.click()}>Ganti Logo</Button>
+                            </Col>
+                            <Col md={9}>
+                               <Form.Group className="mb-3">
+                                  <Form.Label className="x-small fw-bold text-muted uppercase">NAMA {terms.school.toUpperCase()}</Form.Label>
+                                  <Form.Control value={formData.schoolName} onChange={e => setFormData({...formData, schoolName: e.target.value})} required className="fw-bold fs-5" />
+                               </Form.Group>
+                               <Form.Group className="mb-0">
+                                  <Form.Label className="x-small fw-bold text-muted">TAGLINE / SLOGAN</Form.Label>
+                                  <Form.Control value={formData.tagline} onChange={e => setFormData({...formData, tagline: e.target.value})} placeholder="Unggul dalam Prestasi..." />
+                               </Form.Group>
+                            </Col>
+                         </Row>
+                         <hr className="my-4 opacity-50" />
+                         <div className="d-flex justify-content-end">
+                            <Button type="submit" variant="success" className="px-5 py-2 fw-bold shadow rounded-pill" disabled={saving}>
+                               {saving ? <Spinner size="sm" className="me-2" /> : <FaSave className="me-2" />} Simpan Identitas
+                            </Button>
+                         </div>
+                      </Form>
+                   )}
+
+                   {activeSubTab === 'headmaster' && (
+                      <Form onSubmit={handleSaveGeneral} className="animate-fade-in">
+                         <h6 className="fw-bold mb-4 text-success border-start border-3 border-success ps-2">Profil {terms.headmaster}</h6>
+                         <Row>
+                            <Col md={8}>
+                               <Form.Group className="mb-3">
+                                  <Form.Label className="x-small fw-bold text-muted">NAMA LENGKAP {terms.headmaster.toUpperCase()}</Form.Label>
+                                  <Form.Control value={formData.headmaster.name} onChange={e => setFormData({...formData, headmaster: {...formData.headmaster, name: e.target.value}})} className="fw-bold" />
+                               </Form.Group>
+                               <Form.Group className="mb-0">
+                                  <Form.Label className="x-small fw-bold text-muted">SAMBUTAN SINGKAT (HOME)</Form.Label>
+                                  <Form.Control as="textarea" rows={8} value={formData.headmaster.greeting} onChange={e => setFormData({...formData, headmaster: {...formData.headmaster, greeting: e.target.value}})} style={{ fontSize: '1rem', lineHeight: '1.6' }} />
+                               </Form.Group>
+                            </Col>
+                            <Col md={4}>
+                               <div className="text-center mt-3 mt-md-0">
+                                  <Form.Label className="x-small fw-bold text-muted d-block text-start">FOTO PROFIL</Form.Label>
+                                  <div className="mb-3 bg-light rounded-4 border mx-auto overflow-hidden shadow-sm" style={{ width: '100%', height: '250px' }}>
+                                     {headmasterPhotoFile ? (
+                                         <img src={URL.createObjectURL(headmasterPhotoFile)} className="img-fluid h-100 w-100 object-fit-cover" alt="" />
+                                     ) : formData.headmaster.photo ? (
+                                         <img src={formData.headmaster.photo} className="img-fluid h-100 w-100 object-fit-cover" alt="" />
+                                     ) : (
+                                         <FaUserTie className="text-muted mt-5 fs-1" style={{ fontSize: '4rem' }} />
+                                     )}
+                                  </div>
+                                  <input type="file" className="d-none" id="hm-photo" accept="image/*" onChange={e => e.target.files && setHeadmasterPhotoFile(e.target.files[0])} />
+                                  <Button variant="outline-success" className="rounded-pill w-100 fw-bold" onClick={() => document.getElementById('hm-photo')?.click()}>Ganti Foto Profil</Button>
+                               </div>
+                            </Col>
+                         </Row>
+                         <hr className="my-4 opacity-50" />
+                         <div className="d-flex justify-content-end">
+                            <Button type="submit" variant="success" className="px-5 py-2 fw-bold shadow rounded-pill" disabled={saving}>
+                               {saving ? <Spinner size="sm" className="me-2" /> : <FaSave className="me-2" />} Simpan Profil {terms.headmaster}
+                            </Button>
+                         </div>
+                      </Form>
+                   )}
+
+                   {activeSubTab === 'school' && (
+                      <div className="animate-fade-in">
+                         <div className="d-flex justify-content-between align-items-center mb-4">
+                            <h6 className="fw-bold mb-0 text-success border-start border-3 border-success ps-2">Daftar Konten Profil {terms.school}</h6>
+                            <Button variant="success" size="sm" className="rounded-pill px-3 fw-bold" onClick={() => { setCurrentProfile({ title: '', content: '', isActive: true, order: profiles.length }); setShowProfileModal(true); }}>
+                               <FaPlus className="me-1" /> Tambah Halaman Profil
+                            </Button>
+                         </div>
+                         
+                         <ListGroup className="border-0">
+                            {profiles.map((item) => (
+                               <ListGroup.Item key={item.id} className="mb-3 rounded-4 border shadow-sm p-3 bg-white">
+                                  <div className="d-flex justify-content-between align-items-center">
+                                     <div className="d-flex align-items-center">
+                                        <div className={`me-3 p-2 rounded-circle ${item.isActive ? 'bg-success bg-opacity-10 text-success' : 'bg-secondary bg-opacity-10 text-secondary'}`}>
+                                           {item.isActive ? <FaCheckCircle size={20} /> : <FaTimesCircle size={20} />}
+                                        </div>
+                                        <div>
+                                           <div className="fw-bold text-dark">{item.title}</div>
+                                           <code className="extra-small text-muted">/profil/{item.slug}</code>
+                                        </div>
+                                     </div>
+                                     <div className="d-flex gap-2">
+                                        <Button variant="light" size="sm" className="btn-icon" title="Preview" onClick={() => window.open(`/profil/${item.slug}`, '_blank')}><FaEye size={14} className="text-info" /></Button>
+                                        <Button variant="light" size="sm" className="btn-icon" title="Ubah Status" onClick={() => toggleProfileStatus(item)}>{item.isActive ? <FaTimesCircle size={14} className="text-warning" /> : <FaCheckCircle size={14} className="text-success" />}</Button>
+                                        <Button variant="light" size="sm" className="btn-icon" title="Edit" onClick={() => { setCurrentProfile(item); setShowProfileModal(true); }}><FaEdit size={14} className="text-primary" /></Button>
+                                        <Button variant="light" size="sm" className="btn-icon" title="Hapus" onClick={() => handleDeleteProfile(item.id, item.title)}><FaTrash size={14} className="text-danger" /></Button>
+                                     </div>
+                                  </div>
+                               </ListGroup.Item>
+                            ))}
+                            {profiles.length === 0 && <div className="text-center py-5 text-muted border rounded-4 bg-light">Belum ada halaman profil dinamis. Tambahkan item baru seperti Sejarah, Visi Misi, dll.</div>}
+                         </ListGroup>
+                         <p className="small text-muted mt-3"><i className="bi bi-info-circle me-1"></i> Item yang aktif akan otomatis muncul sebagai submenu di navigasi <strong>Profil</strong>.</p>
+                      </div>
+                   )}
+
+                   {activeSubTab === 'contact' && (
+                      <Form onSubmit={handleSaveGeneral} className="animate-fade-in">
+                         <h6 className="fw-bold mb-4 text-success border-start border-3 border-success ps-2">Informasi Kontak & Lokasi</h6>
+                         <Row>
+                            <Col md={6}>
+                               <Form.Group className="mb-3">
+                                  <Form.Label className="x-small fw-bold text-muted"><FaPhone className="me-1" /> NOMOR TELEPON / WA</Form.Label>
+                                  <Form.Control value={formData.contact.phone} onChange={e => setFormData({...formData, contact: {...formData.contact, phone: e.target.value}})} placeholder="0262-xxxxxxx / 0812xxxx" />
+                               </Form.Group>
+                               <Form.Group className="mb-3">
+                                  <Form.Label className="x-small fw-bold text-muted"><FaEnvelope className="me-1" /> ALAMAT EMAIL RESMI</Form.Label>
+                                  <Form.Control type="email" value={formData.contact.email} onChange={e => setFormData({...formData, contact: {...formData.contact, email: e.target.value}})} placeholder="info@sekolah.sch.id" />
+                               </Form.Group>
+                               <Form.Group className="mb-0">
+                                  <Form.Label className="x-small fw-bold text-muted"><FaMapMarkerAlt className="me-1" /> ALAMAT LENGKAP</Form.Label>
+                                  <Form.Control as="textarea" rows={4} value={formData.contact.address} onChange={e => setFormData({...formData, contact: {...formData.contact, address: e.target.value}})} placeholder="Jl. Raya Nomor 123..." />
+                               </Form.Group>
+
+                               <div className="mt-4 p-3 bg-light rounded-4 border">
+                                  <h6 className="fw-bold mb-3 text-dark small"><FaExternalLinkAlt className="me-2 text-primary" /> Link Media Sosial</h6>
+                                  <Form.Group className="mb-3">
+                                     <Form.Label className="x-small fw-bold text-muted"><FaFacebook className="me-1 text-primary" /> FACEBOOK URL</Form.Label>
+                                     <Form.Control value={formData.socialMedia.facebook} onChange={e => setFormData({...formData, socialMedia: {...formData.socialMedia, facebook: e.target.value}})} placeholder="https://facebook.com/..." size="sm" />
+                                  </Form.Group>
+                                  <Form.Group className="mb-3">
+                                     <Form.Label className="x-small fw-bold text-muted"><FaInstagram className="me-1 text-danger" /> INSTAGRAM URL</Form.Label>
+                                     <Form.Control value={formData.socialMedia.instagram} onChange={e => setFormData({...formData, socialMedia: {...formData.socialMedia, instagram: e.target.value}})} placeholder="https://instagram.com/..." size="sm" />
+                                  </Form.Group>
+                                  <Form.Group className="mb-0">
+                                     <Form.Label className="x-small fw-bold text-muted"><FaYoutube className="me-1 text-danger" /> YOUTUBE URL</Form.Label>
+                                     <Form.Control value={formData.socialMedia.youtube} onChange={e => setFormData({...formData, socialMedia: {...formData.socialMedia, youtube: e.target.value}})} placeholder="https://youtube.com/..." size="sm" />
+                                  </Form.Group>
+                               </div>
+                            </Col>
+                            <Col md={6}>
+                               <h6 className="fw-bold mb-3 text-dark border-start border-3 border-success ps-2">Pilih Lokasi di Peta</h6>
+                               <LocationMapPicker 
+                                  latitude={formData.contact.lat}
+                                  longitude={formData.contact.lng}
+                                  onLocationChange={(lat, lng) => setFormData(prev => ({ ...prev, contact: { ...prev.contact, lat, lng }}))}
+                               />
+                               {formData.contact.lat && formData.contact.lng && (
+                                  <div className="mt-3 bg-light p-3 rounded-4 border text-muted small fw-medium">
+                                     <FaLocationArrow className="me-2 text-success" />
+                                     Lat: <strong>{formData.contact.lat}</strong>, Lng: <strong>{formData.contact.lng}</strong>
+                                     <Button variant="outline-info" size="sm" className="rounded-pill ms-3 py-0 px-2 x-small" onClick={() => window.open(`https://www.google.com/maps?q=${formData.contact.lat},${formData.contact.lng}`, '_blank')}>
+                                        <FaEye className="me-1" /> Lihat di Google Maps
+                                     </Button>
+                                  </div>
+                               )}
+                            </Col>
+                         </Row>
+                         <hr className="my-4 opacity-50" />
+                         <div className="d-flex justify-content-end">
+                            <Button type="submit" variant="success" className="px-5 py-2 fw-bold shadow rounded-pill" disabled={saving}>
+                               {saving ? <Spinner size="sm" className="me-2" /> : <FaSave className="me-2" />} Simpan Detail Kontak
+                            </Button>
+                         </div>
+                      </Form>
+                   )}
                 </Card.Body>
              </Card>
+          </Tab>
 
-             {/* 2. E-Services Section Combined with Layout */}
+          <Tab eventKey="slideshow" title={<><FaImage className="me-2" /> Hero Slideshow</>}>
+             <Card className="border-0 shadow-sm mb-4 rounded-4 overflow-hidden">
+                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex justify-content-between align-items-center text-info">
+                   <span><FaImage className="me-2" /> Manajemen Slideshow Hero Utama</span>
+                   <Badge bg="info" className="text-white rounded-pill px-3">{heroSlides.length}/5</Badge>
+                </Card.Header>
+                <Card.Body className="p-4 pt-0">
+                   <div className="bg-light p-4 rounded-4 border mb-4">
+                      <h6 className="fw-bold mb-3">Tambah Slide Baru</h6>
+                      <Row>
+                         <Col md={6}>
+                            <Form.Group className="mb-3">
+                               <Form.Label className="x-small fw-bold text-muted">JUDUL SLIDE</Form.Label>
+                               <Form.Control placeholder="Teks Utama di Slider" value={newSlideData.title} onChange={e => setNewSlideData({...newSlideData, title: e.target.value})} />
+                            </Form.Group>
+                            <Form.Group className="mb-3">
+                               <Form.Label className="x-small fw-bold text-muted">SUB-JUDUL</Form.Label>
+                               <Form.Control placeholder="Teks Penjelasan Kecil" value={newSlideData.subtitle} onChange={e => setNewSlideData({...newSlideData, subtitle: e.target.value})} />
+                            </Form.Group>
+                         </Col>
+                         <Col md={6}>
+                            <Form.Group className="mb-3">
+                               <Form.Label className="x-small fw-bold text-muted">GAMBAR SLIDE (Rekomendasi: 1920x800)</Form.Label>
+                               <Form.Control type="file" accept="image/*" onChange={e => (e.target as any).files && setNewSlideFile((e.target as any).files[0])} />
+                            </Form.Group>
+                            <Button variant="info" className="text-white w-100 fw-bold rounded-pill shadow-sm mt-2 py-2" onClick={handleAddSlide} disabled={saving || !newSlideFile}>
+                               {saving ? <Spinner size="sm" /> : <><FaPlus className="me-1" /> Unggah & Tambahkan Slide</>}
+                            </Button>
+                         </Col>
+                      </Row>
+                   </div>
+                   
+                   <h6 className="fw-bold mb-3">Daftar Slide Aktif</h6>
+                   <Row className="g-4">
+                      {heroSlides.map(slide => (
+                         <Col key={slide.id} md={4}>
+                            <Card className="group shadow-sm rounded-4 overflow-hidden border-0 h-100 bg-white">
+                               <div className="position-relative">
+                                  <img src={slide.url} style={{ width: '100%', height: '180px', objectFit: 'cover' }} alt="" />
+                                  <div className="position-absolute top-0 end-0 p-2">
+                                     <Button variant="danger" size="sm" className="rounded-circle btn-icon shadow" onClick={() => handleDeleteSlide(slide.id, slide.title)}><FaTrash size={12} /></Button>
+                                  </div>
+                               </div>
+                               <Card.Body className="p-3">
+                                  <div className="fw-bold small text-truncate mb-1">{slide.title}</div>
+                                  <div className="text-muted extra-small text-truncate">{slide.subtitle || '-'}</div>
+                                </Card.Body>
+                            </Card>
+                         </Col>
+                      ))}
+                      {heroSlides.length === 0 && <Col xs={12} className="text-center py-5 text-muted">Belum ada slide yang ditambahkan.</Col>}
+                   </Row>
+                </Card.Body>
+             </Card>
+          </Tab>
+
+          <Tab eventKey="services" title={<><FaExternalLinkAlt className="me-2" /> Layanan Digital</>}>
              <Card className="border-0 shadow-sm rounded-4">
-                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex justify-content-between align-items-center">
-                   <span><FaExternalLinkAlt className="me-2 text-primary" /> Layanan Digital (E-Services)</span>
+                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex justify-content-between align-items-center text-primary">
+                   <span><FaExternalLinkAlt className="me-2" /> Daftar Layanan Digital (E-Services)</span>
                    <Button size="sm" variant="primary" className="rounded-pill px-3 fw-bold" onClick={() => { setCurrentService({ title: '', url: '', bgColor: '#198754', textColor: '#ffffff', icon: '🚀', iconType: 'emoji' }); setShowServiceModal(true); }}>
                       <FaPlus className="me-1" /> Tambah Item
                    </Button>
                 </Card.Header>
                 <Card.Body className="p-4 pt-0">
-                   {/* Layout Selection Box */}
                    <div className="bg-light p-3 rounded-4 mb-4 border border-primary border-opacity-10 shadow-sm">
                       <div className="d-flex align-items-center justify-content-between flex-wrap gap-2">
                          <div>
@@ -337,51 +600,8 @@ const Settings: React.FC = () => {
                    </ListGroup>
                 </Card.Body>
              </Card>
-          </Col>
-
-          {/* RIGHT COLUMN: Slideshow */}
-          <Col lg={5}>
-             <Card className="border-0 shadow-sm mb-4 rounded-4 overflow-hidden">
-                <Card.Header className="bg-white py-3 fw-bold border-0 d-flex justify-content-between align-items-center">
-                   <span><FaImage className="me-2 text-info" /> Slideshow Hero Utama</span>
-                   <Badge bg="info" className="text-white rounded-pill px-3">{heroSlides.length}/5</Badge>
-                </Card.Header>
-                <Card.Body className="p-4 pt-0">
-                   <div className="mb-4 p-3 bg-light rounded-4 border">
-                      <Form.Group className="mb-2">
-                         <Form.Label className="x-small fw-bold text-muted">JUDUL SLIDE</Form.Label>
-                         <Form.Control size="sm" placeholder="Teks Utama di Slider" value={newSlideData.title} onChange={e => setNewSlideData({...newSlideData, title: e.target.value})} />
-                      </Form.Group>
-                      <Form.Group className="mb-3">
-                         <Form.Label className="x-small fw-bold text-muted">SUB-JUDUL</Form.Label>
-                         <Form.Control size="sm" placeholder="Teks Penjelasan Kecil" value={newSlideData.subtitle} onChange={e => setNewSlideData({...newSlideData, subtitle: e.target.value})} />
-                      </Form.Group>
-                      <Form.Group className="mb-3">
-                         <Form.Label className="x-small fw-bold text-muted">GAMBAR SLIDE (1920x800)</Form.Label>
-                         <Form.Control size="sm" type="file" accept="image/*" onChange={e => (e.target as any).files && setNewSlideFile((e.target as any).files[0])} />
-                      </Form.Group>
-                      <Button size="sm" variant="info" className="text-white w-100 fw-bold rounded-pill shadow-sm" onClick={handleAddSlide} disabled={saving || !newSlideFile}>
-                         {saving ? <Spinner size="sm" /> : <><FaPlus className="me-1" /> Unggah Slide Baru</>}
-                      </Button>
-                   </div>
-                   
-                   <Row className="g-3">
-                      {heroSlides.map(slide => (
-                         <Col key={slide.id} xs={6}>
-                            <div className="position-relative group shadow-sm rounded-4 overflow-hidden border bg-white h-100">
-                               <img src={slide.url} style={{ width: '100%', height: '100px', objectFit: 'cover' }} alt="" />
-                               <div className="p-2">
-                                  <div className="fw-bold x-small text-truncate mb-1">{slide.title}</div>
-                                  <Button variant="outline-danger" size="sm" className="w-100 py-0 x-small" onClick={() => handleDeleteSlide(slide.id, slide.title)}>Hapus</Button>
-                               </div>
-                            </div>
-                         </Col>
-                      ))}
-                   </Row>
-                </Card.Body>
-             </Card>
-          </Col>
-        </Row>
+          </Tab>
+        </Tabs>
       </Container>
 
       {/* MODAL E-SERVICE */}
@@ -446,12 +666,62 @@ const Settings: React.FC = () => {
          </Modal.Footer>
       </Modal>
 
+      {/* MODAL DYNAMIC PROFILE */}
+      <Modal show={showProfileModal} onHide={() => setShowProfileModal(false)} centered size="xl" className="rounded-4">
+         <Modal.Header closeButton className="border-0 pb-0">
+            <Modal.Title className="fw-bold h5">Kelola Halaman Profil</Modal.Title>
+         </Modal.Header>
+         <Modal.Body className="p-4 pt-2">
+            <Form.Group className="mb-3">
+               <Form.Label className="small fw-bold text-muted">Judul Halaman Profil</Form.Label>
+               <Form.Control 
+                  value={currentProfile.title} 
+                  onChange={e => setCurrentProfile({...currentProfile, title: e.target.value})} 
+                  placeholder="Contoh: Sejarah, Visi & Misi, Struktur Organisasi" 
+                  className="fw-bold"
+               />
+               <Form.Text className="text-muted">Slug URL akan otomatis dibuat dari judul ini.</Form.Text>
+            </Form.Group>
+            <Form.Group className="mb-3">
+               <Form.Label className="small fw-bold text-muted">Konten Halaman</Form.Label>
+               <Form.Control 
+                  as="textarea" 
+                  rows={15} 
+                  value={currentProfile.content} 
+                  onChange={e => setCurrentProfile({...currentProfile, content: e.target.value})} 
+                  placeholder="Tuliskan isi konten profil di sini..." 
+                  style={{ fontSize: '1rem', lineHeight: '1.6' }}
+               />
+            </Form.Group>
+            <Form.Check 
+               type="switch" 
+               id="profile-active-switch" 
+               label="Tampilkan di Menu Publik" 
+               checked={currentProfile.isActive} 
+               onChange={e => setCurrentProfile({...currentProfile, isActive: e.target.checked})}
+               className="fw-bold text-success"
+            />
+         </Modal.Body>
+         <Modal.Footer className="border-0 pt-0">
+            <Button variant="light" className="rounded-pill px-4 fw-bold" onClick={() => setShowProfileModal(false)}>Batal</Button>
+            <Button variant="success" className="rounded-pill px-4 fw-bold" onClick={handleSaveProfile} disabled={saving}>
+               {saving ? <Spinner size="sm" className="me-2" /> : <FaSave className="me-2" />} Simpan Halaman Profil
+            </Button>
+         </Modal.Footer>
+      </Modal>
+
       <style>{`
+        .custom-tabs .nav-link { color: #6c757d; font-weight: 600; border: none; padding: 12px 24px; border-radius: 12px 12px 0 0; }
+        .custom-tabs .nav-link.active { color: #198754; background: white; border-bottom: 3px solid #198754; }
         .x-small { font-size: 0.7rem; }
         .extra-small { font-size: 0.65rem; }
         .btn-icon { width: 32px; height: 32px; padding: 0; display: flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid #eee; }
         .cursor-pointer { cursor: pointer; }
         .icon-item:hover { transform: scale(1.1); border-color: #198754; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        .sub-nav-container::-webkit-scrollbar { height: 4px; }
+        .sub-nav-container::-webkit-scrollbar-thumb { background: #ddd; border-radius: 10px; }
       `}</style>
     </DashboardLayout>
   );

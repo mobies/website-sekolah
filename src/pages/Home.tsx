@@ -158,6 +158,28 @@ const Home: React.FC = () => {
 
       <VideoSlider />
 
+      <section className="py-5 bg-light">
+        <Container>
+          <h3 className="fw-bold mb-4 border-start border-4 border-success ps-3">Agenda Kegiatan</h3>
+          <Row>
+            {agendas.map((item) => (
+              <Col key={item.id} md={6} className="mb-3">
+                <Card className="border-0 shadow-sm hover-lift">
+                  <Card.Body className="p-3">
+                    <Row className="align-items-center">
+                      <Col xs="auto"><div className="bg-success text-white p-3 rounded text-center" style={{ minWidth: '70px' }}><div className="fw-bold h4 mb-0">{new Date(item.date).getDate()}</div><small className="text-uppercase" style={{ fontSize: '0.6rem' }}>{new Date(item.date).toLocaleString('id-ID', { month: 'short' })}</small></div></Col>
+                      <Col><h6 className="fw-bold mb-1">{item.title}</h6><small className="text-muted d-block">{item.time}</small></Col>
+                      <Col xs="auto"><Link to={`/agenda/${item.id}`} className="btn btn-outline-success btn-sm rounded-pill px-3">Detail</Link></Col>
+                    </Row>
+                  </Card.Body>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+          <Link to="/agenda" className="btn btn-link text-success fw-bold p-0 mt-2 text-decoration-none">Lihat Semua Agenda &raquo;</Link>
+        </Container>
+      </section>
+
       {eServices.length > 0 && (
         <section className="py-5 bg-white">
           <Container>
@@ -192,28 +214,6 @@ const Home: React.FC = () => {
           </Container>
         </section>
       )}
-
-      <section className="py-5 bg-light">
-        <Container>
-          <h3 className="fw-bold mb-4 border-start border-4 border-success ps-3">Agenda Kegiatan</h3>
-          <Row>
-            {agendas.map((item) => (
-              <Col key={item.id} md={6} className="mb-3">
-                <Card className="border-0 shadow-sm hover-lift">
-                  <Card.Body className="p-3">
-                    <Row className="align-items-center">
-                      <Col xs="auto"><div className="bg-success text-white p-3 rounded text-center" style={{ minWidth: '70px' }}><div className="fw-bold h4 mb-0">{new Date(item.date).getDate()}</div><small className="text-uppercase" style={{ fontSize: '0.6rem' }}>{new Date(item.date).toLocaleString('id-ID', { month: 'short' })}</small></div></Col>
-                      <Col><h6 className="fw-bold mb-1">{item.title}</h6><small className="text-muted d-block">{item.time}</small></Col>
-                      <Col xs="auto"><Link to={`/agenda/${item.id}`} className="btn btn-outline-success btn-sm rounded-pill px-3">Detail</Link></Col>
-                    </Row>
-                  </Card.Body>
-                </Card>
-              </Col>
-            ))}
-          </Row>
-          <Link to="/agenda" className="btn btn-link text-success fw-bold p-0 mt-2 text-decoration-none">Lihat Semua Agenda &raquo;</Link>
-        </Container>
-      </section>
 
       <style>{`
         .hover-lift { transition: all 0.2s ease; }

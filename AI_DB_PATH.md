@@ -6,7 +6,8 @@
 - `tenants/{tenantId}/stats/{category}/years/{year}/total`: Total item dalam satu tahun.
 - `tenants/{tenantId}/stats/{category}/years/{year}/months/{month}/total`: Total item dalam satu bulan.
 - `tenants/{tenantId}/stats/{category}/years/{year}/months/{month}/days/{day}`: Total item pada tanggal tertentu.
-- `tenants/{tenantId}/settings`: Menyimpan konfigurasi umum sekolah/madrasah, termasuk nama, tagline, logo, profil kepala sekolah, dan preferensi layout (seperti `eServicesLayout`).
+- `tenants/{tenantId}/settings`: Menyimpan konfigurasi umum sekolah/madrasah, termasuk nama, tagline, logo, profil kepala sekolah, informasi kontak (email, telepon, alamat, koordinat peta), serta preferensi layout (seperti `eServicesLayout`).
+- `tenants/{tenantId}/profiles`: Menyimpan daftar konten profil dinamis (seperti Sejarah, Visi Misi, Struktur Organisasi, dll) dengan metadata judul, slug, konten, dan status aktif.
 - `tenants/{tenantId}/e_services`: Menyimpan daftar layanan digital (link eksternal) beserta metadata ikon dan warna untuk ditampilkan di menu dan beranda.
 
 ## Firebase Storage Paths

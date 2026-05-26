@@ -13,6 +13,14 @@ interface EService {
   icon: string;
 }
 
+interface ProfileContent {
+  id: string;
+  title: string;
+  slug: string;
+  isActive: boolean;
+  order: number;
+}
+
 const Header: React.FC = () => {
   const { tenantId } = useTenant();
   const [settings, setSettings] = useState({
@@ -21,6 +29,7 @@ const Header: React.FC = () => {
     logo: '/logo.png'
   });
   const [eServices, setEServices] = useState<EService[]>([]);
+  const [profiles, setProfiles] = useState<ProfileContent[]>([]);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -50,9 +59,25 @@ const Header: React.FC = () => {
       }
     });
 
+    // 3. Fetch Dynamic Profiles for Menu
+    const profilesRef = getDBRef(tenantId, 'profiles');
+    const unsubProfiles = onValue(profilesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.keys(data)
+          .map(key => ({ id: key, ...data[key] }))
+          .filter(p => p.isActive)
+          .sort((a, b) => a.order - b.order);
+        setProfiles(list);
+      } else {
+        setProfiles([]);
+      }
+    });
+
     return () => {
       unsubSettings();
       unsubServices();
+      unsubProfiles();
     };
   }, [tenantId]);
 
@@ -75,10 +100,15 @@ const Header: React.FC = () => {
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="ms-auto fw-medium">
             <Nav.Link as={Link} to="/">Beranda</Nav.Link>
-            <NavDropdown title="Profil" id="profil-nav-dropdown">
-              <NavDropdown.Item as={Link} to="/profil/sejarah">Sejarah</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/profil/visi-misi">Visi & Misi</NavDropdown.Item>
-            </NavDropdown>
+            
+            {/* Dynamic Profil Menu */}
+            {profiles.length > 0 && (
+              <NavDropdown title="Profil" id="profil-nav-dropdown">
+                {profiles.map(p => (
+                  <NavDropdown.Item key={p.id} as={Link} to={`/profil/${p.slug}`}>{p.title}</NavDropdown.Item>
+                ))}
+              </NavDropdown>
+            )}
             
             {/* Dynamic E-Layanan Menu */}
             {eServices.length > 0 && (
@@ -91,8 +121,14 @@ const Header: React.FC = () => {
               </NavDropdown>
             )}
 
-            <Nav.Link as={Link} to="/berita">Berita</Nav.Link>
-            <Nav.Link as={Link} to="/galeri">Galeri</Nav.Link>
+            <NavDropdown title="Konten" id="konten-nav-dropdown">
+              <NavDropdown.Item as={Link} to="/berita">Berita</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/pengumuman">Pengumuman</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/video">Video</NavDropdown.Item>
+              <NavDropdown.Item as={Link} to="/galeri">Galeri</NavDropdown.Item>
+            </NavDropdown>
+
+            <Nav.Link as={Link} to="/agenda">Agenda</Nav.Link>
             <Nav.Link as={Link} to="/kontak">Kontak</Nav.Link>
             <Nav.Link as={Link} to="/dashboard" className="text-success border border-success rounded-pill px-3 ms-lg-2 mt-2 mt-lg-0 py-1 small">Admin</Nav.Link>
           </Nav>

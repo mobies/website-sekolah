@@ -61,3 +61,46 @@ export const getAdminUidByEmail = onCall({
     throw new HttpsError('internal', 'Error searching for user.');
   }
 });
+
+/**
+ * Memverifikasi apakah user yang login memiliki otoritas admin untuk tenant tertentu.
+ */
+export const verifyAdminRole = onCall({
+  cors: true,
+  region: "us-central1"
+}, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError('unauthenticated', 'User must be logged in.');
+  }
+
+  const { tenantId } = request.data;
+  if (!tenantId) {
+    throw new HttpsError('invalid-argument', 'Tenant ID is required.');
+  }
+
+  const uid = request.auth.uid;
+  const db = admin.database();
+
+  try {
+    // 1. Cek di path settings internal tenant (Primary Source)
+    const settingsRef = db.ref(`tenants/${tenantId}/settings/adminUid`);
+    const snapshot = await settingsRef.once('value');
+    
+    if (snapshot.exists() && snapshot.val() === uid) {
+      return { isValid: true, role: 'admin' };
+    }
+
+    // 2. Cek di tenant-lists (Secondary/Fallback Source)
+    const listRef = db.ref(`tenant-lists/${tenantId}/adminUid`);
+    const listSnapshot = await listRef.once('value');
+
+    if (listSnapshot.exists() && listSnapshot.val() === uid) {
+      return { isValid: true, role: 'admin' };
+    }
+
+    return { isValid: false, reason: 'UID mismatch or not authorized' };
+  } catch (error) {
+    logger.error(`Error verifying admin for tenant ${tenantId}:`, error);
+    throw new HttpsError('internal', 'Verification process failed.');
+  }
+});

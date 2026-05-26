@@ -4,10 +4,11 @@ interface Terminology {
   school: string;     // Sekolah or Madrasah
   student: string;    // Siswa or Santri
   headmaster: string; // Kepala Sekolah or Kepala Madrasah
+  berita: string;     // Berita or Kabar
 }
 
 interface TenantContextType {
-  tenantId: string;
+  tenantId: string | undefined; // Changed to undefined for loading state
   domain: string;
   isDefault: boolean;
   level: string; // SD, MI, SMP, MTs, SMA, SMK, MA
@@ -19,14 +20,15 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tenantId, setTenantId] = useState<string>('');
+  const [tenantId, setTenantId] = useState<string | undefined>(undefined); // Start with undefined
   const [domain, setDomain] = useState<string>('');
   const [isDefault, setIsDefault] = useState<boolean>(true);
   const [level] = useState<string>('');
   const [terms] = useState<Terminology>({
-    school: '',
-    student: '',
-    headmaster: ''
+    school: 'Sekolah',
+    student: 'Siswa',
+    headmaster: 'Kepala Sekolah',
+    berita: 'Berita'
   });
 
   useEffect(() => {
@@ -40,12 +42,12 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     
     const detectedId = parts[0];
     
-    console.log("TenantContext: Hostname =", hostname);
-    console.log("TenantContext: Detected TenantID =", detectedId);
-    
-    setTenantId(detectedId);
-    setDomain(hostname);
-    setIsDefault(hostname.includes('localhost') || hostname.includes('127.0.0.1'));
+    // Simulating delay for robustness check
+    setTimeout(() => {
+        setTenantId(detectedId || '');
+        setDomain(hostname);
+        setIsDefault(hostname.includes('localhost') || hostname.includes('127.0.0.1'));
+    }, 100);
   }, []);
 
   const getStoragePath = (path: string) => tenantId ? `${tenantId}/${path.startsWith('/') ? path.slice(1) : path}` : '';

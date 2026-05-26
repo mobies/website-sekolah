@@ -5,30 +5,27 @@ import { rtdb, storage } from "./config";
 /**
  * RTDB Helpers
  */
-export const getRootRef = (path: string) => {
-  return ref(rtdb, path.startsWith('/') ? path.slice(1) : path);
-};
+export const getRootRef = (path: string) => ref(rtdb, path);
 
 export const getDBRef = (tenantId: string, path: string) => {
   return ref(rtdb, `tenants/${tenantId}/${path.startsWith('/') ? path.slice(1) : path}`);
 };
 
-/**
- * Activity Logging & Stats Helpers
- * Uses atomic updates to maintain counts and logs efficiently.
- */
-export const logActivity = async (tenantId: string, activity: {
-  action: 'TAMBAH' | 'EDIT' | 'HAPUS' | 'RESTORE';
-  target: 'BERITA' | 'AGENDA' | 'PENGUMUMAN' | 'GALERI' | 'SLIDESHOW' | 'SETTINGS' | 'TENANT';
-  title: string;
+export const logActivity = async (tenantId: string, data: {
+  action: 'TAMBAH' | 'EDIT' | 'HAPUS' | 'RESTORE' | 'PULIHKAN',
+  target: 'BERITA' | 'AGENDA' | 'PENGUMUMAN' | 'GALERI' | 'SETTINGS' | 'SLIDESHOW' | 'VIDEO',
+  title: string
 }) => {
-  const logsRef = getDBRef(tenantId, 'logs');
-  const newLogRef = push(logsRef);
-
-  await set(newLogRef, {
-    ...activity,
-    timestamp: serverTimestamp()
-  });
+  try {
+    const logsRef = getDBRef(tenantId, 'logs');
+    const newLogRef = push(logsRef);
+    await set(newLogRef, {
+      ...data,
+      timestamp: serverTimestamp()
+    });
+  } catch (error) {
+    console.error("Error logging activity:", error);
+  }
 };
 
 export const updateCounter = async (tenantId: string, key: string, value: number) => {
@@ -38,6 +35,40 @@ export const updateCounter = async (tenantId: string, key: string, value: number
   });
 };
 
+export const updateTimeStats = async (
+  tenantId: string, 
+  category: 'news' | 'agenda' | 'announcement', 
+  dateStr: string, 
+  value: number
+) => {
+  const date = new Date(dateStr);
+  const year = date.getFullYear().toString();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+
+  const updates: any = {};
+  const basePath = `stats/${category}`;
+  
+  updates[`${basePath}/total`] = increment(value);
+  updates[`${basePath}/years/${year}/total`] = increment(value);
+  updates[`${basePath}/years/${year}/months/${month}/total`] = increment(value);
+  updates[`${basePath}/years/${year}/months/${month}/days/${day}`] = increment(value);
+
+  await update(getDBRef(tenantId, ''), updates);
+};
+
+export const updateCategoryStats = async (
+  tenantId: string,
+  categoryType: 'news' | 'agenda' | 'announcement',
+  categoryName: string,
+  value: number
+) => {
+  if (!categoryName) return;
+  const updates: any = {};
+  updates[`stats/${categoryType}/categories/${categoryName.toLowerCase()}`] = increment(value);
+  await update(getDBRef(tenantId, ''), updates);
+};
+
 /**
  * Storage Helpers
  */
@@ -45,7 +76,7 @@ export const getStorageRef = (tenantId: string, path: string) => {
   return storageRef(storage, `${tenantId}/${path.startsWith('/') ? path.slice(1) : path}`);
 };
 
-export const getFileUrl = async (tenantId: string, path: string) => {
+export const getFileURL = async (tenantId: string, path: string) => {
   try {
     const fileRef = getStorageRef(tenantId, path);
     return await getDownloadURL(fileRef);

@@ -17,11 +17,11 @@ const Hero: React.FC = () => {
   const [slides, setSlides] = useState<Slide[]>([]);
 
   useEffect(() => {
+    if (!tenantId) return;
     const settingsRef = getDBRef(tenantId, 'settings/heroSlides');
-    onValue(settingsRef, (snapshot) => {
+    const unsubscribe = onValue(settingsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        // Filter out null values and ensure slide is an object with a valid URL
         const validSlides = Object.values(data).filter((slide: any) => 
           slide && 
           typeof slide === 'object' && 
@@ -29,10 +29,8 @@ const Hero: React.FC = () => {
           slide.url && 
           slide.url.startsWith('http')
         );
-        
         setSlides(validSlides as Slide[]);
       } else {
-        // Fallback slides if none are set
         setSlides([
           {
             id: '1',
@@ -43,6 +41,7 @@ const Hero: React.FC = () => {
         ]);
       }
     });
+    return () => unsubscribe();
   }, [tenantId]);
 
   return (
