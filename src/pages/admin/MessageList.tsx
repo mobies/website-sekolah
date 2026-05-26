@@ -5,7 +5,7 @@ import { FaTrash, FaReply, FaPaperPlane } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef, logActivity } from '../../firebase/utils';
-import { update, ref, query, orderByChild, limitToLast, endAt, get, remove } from 'firebase/database';
+import { update, ref, query, orderByChild, limitToLast, endAt, get } from 'firebase/database';
 import { rtdb as database } from '../../firebase/config';
 import { showConfirm, toast, showAlert } from '../../utils/alerts';
 
@@ -113,7 +113,10 @@ const MessageList: React.FC = () => {
   const markAsRead = async (msg: Message) => {
     if (!tenantId || msg.isRead) return;
     try {
-      await update(getDBRef(tenantId, `messages/${msg.id}`), { isRead: true });
+      const updates: { [key: string]: any } = {};
+      updates[`/messages/${msg.id}/isRead`] = true;
+      updates[`/user_messages/${msg.uid}/${msg.id}/isRead`] = true;
+      await update(getDBRef(tenantId), updates);
       setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, isRead: true } : m));
     } catch (error) { console.error(error); }
   };
@@ -129,10 +132,18 @@ const MessageList: React.FC = () => {
     if (!tenantId || !selectedMsg || !replyText.trim()) return;
     setSendingReply(true);
     try {
-      await update(getDBRef(tenantId, `messages/${selectedMsg.id}`), { 
-        reply: replyText,
+      const updates: { [key: string]: any } = {};
+      const updatedMessage = { 
+        ...selectedMsg, 
+        reply: replyText, 
         isRead: true 
-      });
+      };
+      
+      updates[`/messages/${selectedMsg.id}`] = updatedMessage;
+      updates[`/user_messages/${selectedMsg.uid}/${selectedMsg.id}`] = updatedMessage;
+
+      await update(getDBRef(tenantId), updates);
+      
       setMessages(prev => prev.map(m => m.id === selectedMsg.id ? { ...m, reply: replyText, isRead: true } : m));
       toast.fire({ icon: 'success', title: 'Balasan terkirim' });
       setShowReplyModal(false);
@@ -148,7 +159,11 @@ const MessageList: React.FC = () => {
     if (!tenantId) return;
     if ((await showConfirm('Hapus Pesan?', 'Pesan ini akan dihapus permanen.')).isConfirmed) {
        try {
-          await remove(getDBRef(tenantId, `messages/${msg.id}`));
+          const updates: { [key: string]: null } = {};
+          updates[`/messages/${msg.id}`] = null;
+          updates[`/user_messages/${msg.uid}/${msg.id}`] = null;
+          await update(getDBRef(tenantId), updates);
+
           setMessages(prev => prev.filter(m => m.id !== msg.id));
           toast.fire({ icon: 'success', title: 'Pesan dihapus' });
        } catch (error) { showAlert('Gagal', 'Terjadi kesalahan.', 'error'); }
@@ -219,7 +234,7 @@ const MessageList: React.FC = () => {
       </Container>
 
       {/* Reply Modal */}
-      <Modal show={showReplyModal} onHide={() => setShowReplyModal(false)} centered rounded-4 shadow>
+      <Modal show={showReplyModal} onHide={() => setShowReplyModal(false)} centered>
         <Modal.Header closeButton className="border-0 pt-4 px-4">
            <Modal.Title className="fw-bold h5">Balas Pesan</Modal.Title>
         </Modal.Header>

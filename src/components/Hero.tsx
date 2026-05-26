@@ -48,7 +48,7 @@ const Hero: React.FC = () => {
     <>
       <Carousel fade interval={5000} className="bg-dark hero-carousel">
         {slides.map((slide) => (
-          <Carousel.Item key={slide.id} style={{ height: '600px' }}>
+          <Carousel.Item key={slide.id} style={{ height: '100vh' }}>
             <div className="h-100 position-relative overflow-hidden">
               <ProgressiveImage
                 src={slide.url}
@@ -72,7 +72,7 @@ const Hero: React.FC = () => {
                 <Container className="text-center">
                   <h1 className="display-3 fw-bold mb-3 animate-up">{slide.title}</h1>
                   <p className="lead mb-4 fs-4 animate-up-delayed">{slide.subtitle}</p>
-                  <Button variant="success" size="lg" className="px-5 py-3 fw-bold rounded-pill shadow">Jelajahi Madrasah</Button>
+                  
                 </Container>
               </div>
             </div>

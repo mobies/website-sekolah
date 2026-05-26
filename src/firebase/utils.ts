@@ -7,7 +7,7 @@ import { rtdb, storage } from "./config";
  */
 export const getRootRef = (path: string) => ref(rtdb, path);
 
-export const getDBRef = (tenantId: string, path: string) => {
+export const getDBRef = (tenantId: string, path: string = '') => {
   return ref(rtdb, `tenants/${tenantId}/${path.startsWith('/') ? path.slice(1) : path}`);
 };
 

@@ -3,7 +3,7 @@ import { Container, Row, Col, Card, Breadcrumb, Spinner, Form, Button, Badge, Li
 import { Link } from 'react-router-dom';
 import { useTenant } from '../firebase/TenantContext';
 import { getDBRef } from '../firebase/utils';
-import { onValue, push, set, serverTimestamp, get, query, orderByChild, equalTo } from 'firebase/database';
+import { onValue, push, update, serverTimestamp, get, query, orderByChild, limitToLast } from 'firebase/database';
 import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaPaperPlane, FaLock, FaExclamationCircle, FaHistory, FaCheckCircle, FaReply } from 'react-icons/fa';
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -30,6 +30,7 @@ interface ContactData {
 
 interface UserMessage {
   id: string;
+  uid: string;
   subject: string;
   message: string;
   createdAt: number;
@@ -51,7 +52,7 @@ const Contact: React.FC = () => {
     email: '',
     subject: '',
     message: '',
-    hp: ''
+    hp: '' // Honeypot
   });
   const [sending, setSending] = useState(false);
   const [lastSentAt, setLastSentAt] = useState<number | null>(null);
@@ -61,7 +62,7 @@ const Contact: React.FC = () => {
   const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser && tenantId) {
         setFormData(prev => ({
@@ -76,10 +77,10 @@ const Contact: React.FC = () => {
           if (snap.exists()) setLastSentAt(snap.val().lastSentAt);
         });
 
-        // 2. Fetch Message History (Cost efficient: filtered by uid)
+        // 2. Fetch Message History (Optimized with denormalized data)
         setLoadingHistory(true);
-        const messagesRef = getDBRef(tenantId, 'messages');
-        const historyQuery = query(messagesRef, orderByChild('uid'), equalTo(currentUser.uid));
+        const userMessagesRef = getDBRef(tenantId, `user_messages/${currentUser.uid}`);
+        const historyQuery = query(userMessagesRef, orderByChild('createdAt'), limitToLast(3));
         
         onValue(historyQuery, (snapshot) => {
           const data = snapshot.val();
@@ -135,20 +136,22 @@ const Contact: React.FC = () => {
   const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tenantId || !user) return;
-
     if (!canSendMessage()) {
       showAlert('Limit Pengiriman', `Anda sudah mengirim pesan hari ini. Silakan coba kembali dalam ${getRemainingTime()}.`, 'info');
       return;
     }
-
-    if (formData.hp) return;
+    if (formData.hp) return; // Honeypot check
 
     setSending(true);
     try {
       const msgRef = push(getDBRef(tenantId, 'messages'));
+      if (!msgRef.key) {
+        console.error("Failed to generate a new message key.");
+        throw new Error("Message key generation failed.");
+      }
       const timestamp = Date.now();
       
-      await set(msgRef, {
+      const messageData = {
         uid: user.uid,
         authEmail: user.email,
         authName: user.displayName,
@@ -157,9 +160,20 @@ const Contact: React.FC = () => {
         message: formData.message,
         createdAt: serverTimestamp(),
         isRead: false
-      });
+      };
 
-      await set(getDBRef(tenantId, `user_message_meta/${user.uid}`), {
+      // Denormalization: Write to both paths
+      const updates: { [key: string]: any } = {};
+      
+      const userMessageData = { ...messageData, createdAt: timestamp };
+
+      updates[`/messages/${msgRef.key}`] = messageData;
+      updates[`/user_messages/${user.uid}/${msgRef.key}`] = userMessageData;
+      
+      await update(getDBRef(tenantId), updates);
+
+      // Update user meta
+      await update(getDBRef(tenantId, `user_message_meta/${user.uid}`), {
         lastSentAt: timestamp,
         email: user.email
       });
@@ -168,7 +182,8 @@ const Contact: React.FC = () => {
       toast.fire({ icon: 'success', title: 'Pesan Anda telah terkirim!' });
       setFormData(prev => ({ ...prev, subject: '', message: '', hp: '' }));
     } catch (error) {
-      showAlert('Gagal', 'Terjadi kesalahan.', 'error');
+      console.error("Detailed error on message submission:", error);
+      showAlert('Gagal', 'Terjadi kesalahan. Silakan cek console untuk detail.', 'error');
     } finally {
       setSending(false);
     }
@@ -184,8 +199,8 @@ const Contact: React.FC = () => {
   const isLocked = !user || !canSendMessage();
 
   return (
-    <div className="contact-page-wrapper bg-light min-vh-100">
-      <section className="contact-hero py-5 bg-white border-bottom text-center text-md-start">
+    <div className="bg-light min-vh-100">
+      <section className="py-5 bg-white border-bottom text-center text-md-start">
         <Container>
           <Breadcrumb className="mb-4 justify-content-center justify-content-md-start">
             <Breadcrumb.Item linkAs={Link} linkProps={{ to: "/" }}>Beranda</Breadcrumb.Item>
@@ -198,30 +213,33 @@ const Contact: React.FC = () => {
 
       <Container className="py-5">
         <Row className="g-4">
-          {/* LEFT: Info & History */}
           <Col lg={4}>
             <div className="d-flex flex-column gap-4">
-               {/* Contact Info */}
                <Card className="border-0 shadow-sm rounded-4 p-4 bg-white">
                   <h5 className="fw-bold mb-4 border-start border-4 border-success ps-3">Info Kontak</h5>
-                  <div className="d-flex mb-3">
-                    <FaPhone className="text-success me-3 mt-1" />
-                    <div><small className="text-muted text-uppercase d-block fw-bold" style={{fontSize: '0.65rem'}}>Telepon</small>
-                    <a href={`tel:${contactInfo?.phone}`} className="text-dark text-decoration-none fw-bold small">{contactInfo?.phone || '-'}</a></div>
+                  <div className="d-flex mb-3 align-items-start">
+                    <FaPhone className="text-success me-3 mt-1" size={14} />
+                    <div>
+                      <small className="text-muted text-uppercase d-block fw-bold" style={{fontSize: '0.65rem'}}>Telepon</small>
+                      <a href={`tel:${contactInfo?.phone}`} className="text-dark text-decoration-none fw-bold small">{contactInfo?.phone || '-'}</a>
+                    </div>
                   </div>
-                  <div className="d-flex mb-3">
-                    <FaEnvelope className="text-success me-3 mt-1" />
-                    <div><small className="text-muted text-uppercase d-block fw-bold" style={{fontSize: '0.65rem'}}>Email</small>
-                    <a href={`mailto:${contactInfo?.email}`} className="text-dark text-decoration-none fw-bold small text-break">{contactInfo?.email || '-'}</a></div>
+                  <div className="d-flex mb-3 align-items-start">
+                    <FaEnvelope className="text-success me-3 mt-1" size={14} />
+                    <div>
+                      <small className="text-muted text-uppercase d-block fw-bold" style={{fontSize: '0.65rem'}}>Email</small>
+                      <a href={`mailto:${contactInfo?.email}`} className="text-dark text-decoration-none fw-bold small text-break">{contactInfo?.email || '-'}</a>
+                    </div>
                   </div>
-                  <div className="d-flex mb-0">
-                    <FaMapMarkerAlt className="text-success me-3 mt-1" />
-                    <div><small className="text-muted text-uppercase d-block fw-bold" style={{fontSize: '0.65rem'}}>Alamat</small>
-                    <p className="text-dark fw-medium small mb-0">{contactInfo?.address || '-'}</p></div>
+                  <div className="d-flex mb-0 align-items-start">
+                    <FaMapMarkerAlt className="text-success me-3 mt-1" size={14} />
+                    <div>
+                      <small className="text-muted text-uppercase d-block fw-bold" style={{fontSize: '0.65rem'}}>Alamat</small>
+                      <p className="text-dark fw-medium small mb-0">{contactInfo?.address || '-'}</p>
+                    </div>
                   </div>
                </Card>
 
-               {/* Message History */}
                {user && (
                  <Card className="border-0 shadow-sm rounded-4 overflow-hidden bg-white">
                     <Card.Header className="bg-transparent border-0 pt-4 px-4 pb-0">
@@ -235,9 +253,9 @@ const Contact: React.FC = () => {
                        ) : myMessages.length === 0 ? (
                          <div className="text-center py-5 text-muted small px-3">Belum ada riwayat pesan.</div>
                        ) : (
-                         <ListGroup variant="flush" className="max-height-400 overflow-auto">
+                         <ListGroup variant="flush">
                             {myMessages.map(msg => (
-                              <ListGroup.Item key={msg.id} className="py-3 px-4 border-bottom-light">
+                              <ListGroup.Item key={msg.id} className="py-3 px-4 border-bottom">
                                  <div className="d-flex justify-content-between align-items-start mb-1">
                                     <small className="fw-bold text-dark text-truncate pe-2">{msg.subject}</small>
                                     {msg.reply ? (
@@ -250,12 +268,10 @@ const Contact: React.FC = () => {
                                  </div>
                                  <p className="extra-small text-muted mb-2 text-truncate-2">{msg.message}</p>
                                  {msg.reply && (
-                                   <div className="bg-success bg-opacity-10 rounded-3 p-2 border-start border-3 border-success mb-2">
-                                      <div className="d-flex align-items-center gap-1 text-success extra-small fw-bold mb-1">
-                                         <FaReply size={10} /> Balasan Admin:
-                                      </div>
-                                      <p className="extra-small text-dark mb-0 italic">{msg.reply}</p>
-                                   </div>
+                                   <p className="extra-small text-dark mb-2 italic">
+                                     <FaReply size={10} className="me-1 text-success" />
+                                     <span className="fw-bold">Balasan Admin:</span> "{msg.reply}"
+                                   </p>
                                  )}
                                  <div className="extra-small text-muted opacity-75 d-flex justify-content-between align-items-center">
                                     <span>{new Date(msg.createdAt).toLocaleDateString('id-ID')}</span>
@@ -271,7 +287,6 @@ const Contact: React.FC = () => {
             </div>
           </Col>
 
-          {/* RIGHT: Form */}
           <Col lg={8}>
             <Card className="border-0 shadow-sm rounded-4 p-4 p-md-5 bg-white h-100">
                <h4 className="fw-bold mb-4">Kirimkan Pesan</h4>
@@ -291,25 +306,25 @@ const Contact: React.FC = () => {
                 <Row className="g-3">
                   <Col md={6}>
                     <Form.Group className="mb-3">
-                      <Form.Label className="small fw-bold text-muted uppercase">Nama Anda</Form.Label>
+                      <Form.Label className="small fw-bold text-muted text-uppercase">Nama Anda</Form.Label>
                       <Form.Control required disabled={isLocked} placeholder="Nama lengkap..." className="bg-light border-0 py-2 shadow-none" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} />
                     </Form.Group>
                   </Col>
                   <Col md={6}>
                     <Form.Group className="mb-3">
-                      <Form.Label className="small fw-bold text-muted uppercase">Email (Akun)</Form.Label>
+                      <Form.Label className="small fw-bold text-muted text-uppercase">Email (Akun)</Form.Label>
                       <Form.Control required type="email" readOnly className="bg-light border-0 py-2 shadow-none text-muted" value={formData.email} />
                     </Form.Group>
                   </Col>
                   <Col xs={12}>
                     <Form.Group className="mb-3">
-                      <Form.Label className="small fw-bold text-muted uppercase">Subjek</Form.Label>
+                      <Form.Label className="small fw-bold text-muted text-uppercase">Subjek</Form.Label>
                       <Form.Control disabled={isLocked} placeholder="Tujuan pesan..." className="bg-light border-0 py-2 shadow-none" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})} />
                     </Form.Group>
                   </Col>
                   <Col xs={12}>
                     <Form.Group className="mb-4">
-                      <Form.Label className="small fw-bold text-muted uppercase">Isi Pesan</Form.Label>
+                      <Form.Label className="small fw-bold text-muted text-uppercase">Isi Pesan</Form.Label>
                       <Form.Control as="textarea" rows={5} required disabled={isLocked} placeholder="Tuliskan pesan atau pertanyaan Anda di sini..." className="bg-light border-0 py-2 shadow-none" value={formData.message} onChange={e => setFormData({...formData, message: e.target.value})} />
                     </Form.Group>
                   </Col>
@@ -324,24 +339,21 @@ const Contact: React.FC = () => {
           </Col>
         </Row>
         
-        {/* Map */}
-        <div className="map-wrapper shadow-sm rounded-4 overflow-hidden border bg-white p-2 mt-5">
-          <div style={{ height: '400px' }}>
-            {position ? (
+        {position && (
+          <div className="shadow-sm rounded-4 overflow-hidden border bg-white p-2 mt-5">
+            <div style={{ height: '400px' }}>
               <MapContainer center={position} zoom={16} scrollWheelZoom={false} style={{ height: '100%', width: '100%' }}>
                 <TileLayer attribution='&copy; OpenStreetMap' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <Marker position={position}><Popup><strong className="text-success">{schoolName}</strong></Popup></Marker>
               </MapContainer>
-            ) : <div className="d-flex flex-column justify-content-center align-items-center h-100 bg-light rounded-3"><FaMapMarkerAlt size={40} className="text-muted mb-2" /><p className="text-muted">Peta belum tersedia</p></div>}
+            </div>
           </div>
-        </div>
+        )}
       </Container>
 
       <style>{`
         .extra-small { font-size: 0.65rem; }
-        .uppercase { text-transform: uppercase; }
-        .max-height-400 { max-height: 400px; }
-        .border-bottom-light { border-bottom: 1px solid #f8f9fa; }
+        .text-uppercase { text-transform: uppercase; }
         .text-truncate-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .italic { font-style: italic; }
       `}</style>
