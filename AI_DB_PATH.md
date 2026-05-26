@@ -9,7 +9,13 @@
 - `tenants/{tenantId}/settings`: Menyimpan konfigurasi umum sekolah/madrasah, termasuk nama, tagline, logo, profil kepala sekolah, informasi kontak (email, telepon, alamat, koordinat peta), serta preferensi layout (seperti `eServicesLayout`).
 - `tenants/{tenantId}/profiles`: Menyimpan daftar konten profil dinamis (seperti Sejarah, Visi Misi, Struktur Organisasi, dll) dengan metadata judul, slug, konten, dan status aktif.
 - `tenants/{tenantId}/e_services`: Menyimpan daftar layanan digital (link eksternal) beserta metadata ikon dan warna untuk ditampilkan di menu dan beranda.
+- `tenants/{tenantId}/staff/{id}`: Menyimpan data guru dan staf (Nama, Foto, Jenis Kepegawaian, Mapel, Status Aktif).
+- `tenants/{tenantId}/staff_search_index/{id}`: Index pencarian guru & staf (Nama lowercase, jenis).
 
 ## Firebase Storage Paths
 
-(Belum ada path baru yang ditambahkan untuk Firebase Storage)
+- `tenants/{tenantId}/staff_photos/{fileName}`: Penyimpanan foto profil guru dan staf (Format WebP, Max 200KB).
+- `tenants/{tenantId}/settings/logo/`: Logo sekolah.
+- `tenants/{tenantId}/settings/headmaster/`: Foto kepala sekolah.
+- `tenants/{tenantId}/settings/slides/`: Gambar hero slideshow.
+- `tenants/{tenantId}/gallery/{albumId}/`: Foto-foto dalam album galeri.

@@ -3,6 +3,7 @@ import { Container, Row, Col, Card, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import Hero from '../components/Hero';
 import VideoSlider from '../components/VideoSlider';
+import StaffSlider from '../components/StaffSlider';
 import { useTenant } from '../firebase/TenantContext';
 import { getDBRef } from '../firebase/utils';
 import { onValue } from 'firebase/database';
@@ -214,6 +215,8 @@ const Home: React.FC = () => {
           </Container>
         </section>
       )}
+
+      <StaffSlider />
 
       <style>{`
         .hover-lift { transition: all 0.2s ease; }

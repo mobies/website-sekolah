@@ -7,6 +7,7 @@ import {
   FaCalendarAlt, 
   FaImages, 
   FaBullhorn, 
+  FaUsers,
   FaUserCog,
   FaSignOutAlt,
   FaChevronDown,
@@ -56,6 +57,7 @@ const Sidebar: React.FC = () => {
     { path: '/dashboard/berita', icon: <FaNewspaper />, label: 'Berita' },
     { path: '/dashboard/agenda', icon: <FaCalendarAlt />, label: 'Agenda' },
     { path: '/dashboard/pengumuman', icon: <FaBullhorn />, label: 'Pengumuman' },
+    { path: '/dashboard/staff', icon: <FaUsers />, label: 'Guru & Staf' },
     { 
       label: 'Galeri',
       icon: <FaImages />,

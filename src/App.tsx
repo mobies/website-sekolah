@@ -12,6 +12,7 @@ import AgendaDetail from './pages/AgendaDetail';
 import AnnouncementListPublic from './pages/AnnouncementListPublic';
 import AnnouncementDetail from './pages/AnnouncementDetail';
 import VideoGallery from './pages/VideoGallery';
+import StaffListPublic from './pages/StaffListPublic';
 import AdminDashboard from './pages/AdminDashboard';
 import NewsList from './pages/admin/NewsList';
 import NewsForm from './pages/admin/NewsForm';
@@ -24,6 +25,8 @@ import GalleryForm from './pages/admin/GalleryForm';
 import PhotoManager from './pages/admin/PhotoManager';
 import VideoList from './pages/admin/VideoList';
 import VideoForm from './pages/admin/VideoForm';
+import StaffList from './pages/admin/StaffList';
+import StaffForm from './pages/admin/StaffForm';
 import Settings from './pages/admin/Settings';
 import OwnerDashboard from './pages/OwnerDashboard';
 import OwnerLogin from './pages/OwnerLogin';
@@ -56,6 +59,7 @@ const AppContent = () => {
           <Route path="/pengumuman" element={<AnnouncementListPublic />} />
           <Route path="/pengumuman/:id" element={<AnnouncementDetail />} />
           <Route path="/video" element={<VideoGallery />} />
+          <Route path="/guru-dan-staf" element={<StaffListPublic />} />
           
           {/* Public Login/Register Routes */}
           <Route path="/owner-login" element={<OwnerLogin />} />
@@ -91,6 +95,9 @@ const AppContent = () => {
           <Route path="/dashboard/galeri/video" element={<ProtectedRoute redirectTo="/admin-login"><VideoList /></ProtectedRoute>} />
           <Route path="/dashboard/galeri/video/tambah" element={<ProtectedRoute redirectTo="/admin-login"><VideoForm /></ProtectedRoute>} />
           <Route path="/dashboard/galeri/video/edit/:id" element={<ProtectedRoute redirectTo="/admin-login"><VideoForm /></ProtectedRoute>} />
+          <Route path="/dashboard/staff" element={<ProtectedRoute redirectTo="/admin-login"><StaffList /></ProtectedRoute>} />
+          <Route path="/dashboard/staff/tambah" element={<ProtectedRoute redirectTo="/admin-login"><StaffForm /></ProtectedRoute>} />
+          <Route path="/dashboard/staff/edit/:id" element={<ProtectedRoute redirectTo="/admin-login"><StaffForm /></ProtectedRoute>} />
           <Route path="/dashboard/settings" element={<ProtectedRoute redirectTo="/admin-login"><Settings /></ProtectedRoute>} />
           
           <Route path="*" element={<Home />} />

@@ -23,7 +23,8 @@ const Topbar: React.FC = () => {
     '/dashboard/pengumuman', 
     '/dashboard/agenda', 
     '/dashboard/galeri',
-    '/dashboard/galeri/video'
+    '/dashboard/galeri/video',
+    '/dashboard/staff'
   ];
   
   // Hide on main dashboard, settings, or any edit/tambah pages
