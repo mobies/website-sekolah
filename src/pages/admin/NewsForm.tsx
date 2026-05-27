@@ -1,14 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Container, Card, Button, Form, Row, Col, Spinner } from 'react-bootstrap';
+import { Container, Card, Button, Form, Row, Col, Spinner, Modal } from 'react-bootstrap';
 import { useNavigate, useParams } from 'react-router-dom';
-import { FaSave, FaArrowLeft, FaCloudUploadAlt } from 'react-icons/fa';
+import { FaSave, FaArrowLeft, FaCloudUploadAlt, FaSyncAlt } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
+import ProgressiveImage from '../../components/ProgressiveImage';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef, getStorageRef, logActivity, updateTimeStats, updateCategoryStats } from '../../firebase/utils';
+import { convertToWebP, convertUrlToWebP } from '../../firebase/imageUtils';
+import type { ImageMetadata } from '../../firebase/imageUtils';
+import { getImageMetadata, getStoragePathFromDownloadURL } from '../../firebase/imageUtils';
 import { onValue, serverTimestamp, ref as dbRef, update } from 'firebase/database';
-import { uploadBytes, getDownloadURL } from 'firebase/storage';
-import { rtdb as database } from '../../firebase/config';
-import { showAlert, toast } from '../../utils/alerts';
+import { uploadBytes, getDownloadURL, ref, deleteObject } from 'firebase/storage';
+import { rtdb as database, storage } from '../../firebase/config';
+import { showAlert, toast, showConfirm } from '../../utils/alerts';
 
 const NewsForm: React.FC = () => {
   const { tenantId } = useTenant();
@@ -23,6 +27,7 @@ const NewsForm: React.FC = () => {
     status: 'published' as 'published' | 'draft',
     date: new Date().toISOString().split('T')[0],
     imageUrl: '',
+    thumbnail: '',
     coverObjectFit: 'cover' as 'cover' | 'contain' | 'fill',
   });
   
@@ -31,23 +36,52 @@ const NewsForm: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
   const [originalData, setOriginalData] = useState<any>(null);
+  const [coverImageMetadata, setCoverImageMetadata] = useState<ImageMetadata | null>(null);
+
+  // Re-conversion state
+  const [isReconverting, setIsReconverting] = useState(false);
+  const [showPreviewModal, setShowPreviewModal] = useState(false);
+  const [reconvertedBlob, setReconvertedBlob] = useState<Blob | null>(null);
+  const [reconvertedPreviewUrl, setReconvertedPreviewUrl] = useState<string | null>(null);
+
+  // Helper to format bytes
+  const formatBytes = (bytes: number, decimals = 2) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+  };
 
   useEffect(() => {
     if (isEdit && tenantId) {
       const newsRef = getDBRef(tenantId, `news/${id}`);
-      onValue(newsRef, (snapshot) => {
+      onValue(newsRef, async (snapshot) => {
         const data = snapshot.val();
         if (data) {
           setFormData(data);
           setOriginalData(data);
-          if (data.imageUrl || data.thumbnail) {
-            setImagePreview(data.thumbnail || data.imageUrl);
+          const imageUrl = data.thumbnail || data.imageUrl;
+          if (imageUrl) {
+            setImagePreview(imageUrl);
+            const storagePath = getStoragePathFromDownloadURL(imageUrl);
+            if (storagePath) {
+              const metadata = await getImageMetadata(storagePath);
+              setCoverImageMetadata(metadata);
+            } else {
+              setCoverImageMetadata(null);
+            }
+          } else {
+            setImagePreview(null);
+            setCoverImageMetadata(null);
           }
         }
         setFetching(false);
       }, { onlyOnce: true });
     } else {
       setFetching(false);
+      setCoverImageMetadata(null);
     }
   }, [id, tenantId, isEdit]);
 
@@ -56,6 +90,7 @@ const NewsForm: React.FC = () => {
       const file = e.target.files[0];
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
+      setCoverImageMetadata(null); // Clear old metadata
     }
   };
 
@@ -67,31 +102,26 @@ const NewsForm: React.FC = () => {
       let thumbnailUrl = formData.thumbnail || formData.imageUrl || '';
 
       if (imageFile) {
-        const fileName = `${Date.now()}_${imageFile.name}`;
+        const webpBlob = await convertToWebP(imageFile, { maxSizeBytes: 100 * 1024 });
+        const fileName = `${Date.now()}_news.webp`;
         const fileRef = getStorageRef(tenantId, `news/${fileName}`);
-        await uploadBytes(fileRef, imageFile);
+        await uploadBytes(fileRef, webpBlob);
         thumbnailUrl = await getDownloadURL(fileRef);
+
+        if (isEdit && originalData?.thumbnail) {
+          try {
+            const oldImageRef = ref(storage, originalData.thumbnail);
+            await deleteObject(oldImageRef);
+          } catch (deleteError: any) {
+            if (deleteError.code !== 'storage/object-not-found') {
+              console.error("Gagal menghapus gambar lama:", deleteError);
+            }
+          }
+        }
       }
 
-      const newsData = {
-        ...formData,
-        thumbnail: thumbnailUrl,
-        updatedAt: serverTimestamp(),
-        year: new Date(formData.date).getFullYear(),
-        month: new Date(formData.date).getMonth() + 1,
-        day: new Date(formData.date).getDate(),
-        deleted: false
-      };
-
-      const searchIndexData = {
-        t: formData.title.toLowerCase(),
-        title: formData.title,
-        date: formData.date,
-        c: formData.category,
-        img: thumbnailUrl,
-        deleted: false
-      };
-
+      const newsData = { ...formData, thumbnail: thumbnailUrl, updatedAt: serverTimestamp(), year: new Date(formData.date).getFullYear(), month: new Date(formData.date).getMonth() + 1, day: new Date(formData.date).getDate(), deleted: false };
+      const searchIndexData = { t: formData.title.toLowerCase(), title: formData.title, date: formData.date, c: formData.category, img: thumbnailUrl, deleted: false };
       const updates: any = {};
 
       if (isEdit) {
@@ -121,6 +151,69 @@ const NewsForm: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const handleReconvertClick = async () => {
+    if (!imagePreview) return;
+    const result = await showConfirm('Konversi Ulang Gambar?', 'Gambar ini akan dikonversi ke format WebP (maks 100KB). Lanjutkan?');
+    if (!result.isConfirmed) return;
+
+    setIsReconverting(true);
+    try {
+      const blob = await convertUrlToWebP(imagePreview);
+      setReconvertedBlob(blob);
+      setReconvertedPreviewUrl(URL.createObjectURL(blob));
+      setShowPreviewModal(true);
+    } catch (error: any) {
+      showAlert('Gagal Konversi', error.message, 'error');
+    } finally {
+      setIsReconverting(false);
+    }
+  };
+
+  const handleSaveReconvertedImage = async () => {
+    if (!reconvertedBlob || !tenantId || !isEdit || !originalData) return;
+    setIsReconverting(true);
+    try {
+      const fileName = `${Date.now()}_news_reconverted.webp`;
+      const fileRef = getStorageRef(tenantId, `news/${fileName}`);
+      await uploadBytes(fileRef, reconvertedBlob);
+      const newUrl = await getDownloadURL(fileRef);
+      
+      const updates: any = {};
+      updates[`tenants/${tenantId}/news/${id}/thumbnail`] = newUrl;
+      updates[`tenants/${tenantId}/news_search_index/${id}/img`] = newUrl;
+      await update(dbRef(database), updates);
+      
+      try {
+        const oldImageRef = ref(storage, originalData.thumbnail);
+        await deleteObject(oldImageRef);
+      } catch (deleteError: any) {
+        if (deleteError.code !== 'storage/object-not-found') {
+          console.error("Gagal menghapus gambar lama setelah rekonversi:", deleteError);
+        }
+      }
+
+      setFormData(prev => ({ ...prev, thumbnail: newUrl }));
+      setImagePreview(newUrl);
+      const newMetadata = await getImageMetadata(getStoragePathFromDownloadURL(newUrl)!);
+      setCoverImageMetadata(newMetadata);
+      
+      setShowPreviewModal(false);
+      setReconvertedBlob(null);
+      if(reconvertedPreviewUrl) URL.revokeObjectURL(reconvertedPreviewUrl);
+      setReconvertedPreviewUrl(null);
+
+      await logActivity(tenantId, { action: 'EDIT', target: 'BERITA', title: `Rekonversi gambar untuk: ${formData.title}` });
+      toast.fire({ icon: 'success', title: 'Gambar berhasil dikonversi ulang' });
+
+    } catch (error: any) {
+      showAlert('Gagal Menyimpan', error.message, 'error');
+    } finally {
+      setIsReconverting(false);
+    }
+  };
+
+  const needsReconversion = coverImageMetadata && (coverImageMetadata.fileExtension !== 'webp' || coverImageMetadata.sizeBytes > 102400);
 
   if (fetching) return <DashboardLayout><div className="text-center py-5"><Spinner animation="border" variant="success" /></div></DashboardLayout>;
 
@@ -181,9 +274,31 @@ const NewsForm: React.FC = () => {
               <Card className="border-0 shadow-sm">
                 <Card.Body className="p-4">
                   <Form.Label className="fw-bold small d-block text-start mb-3">Gambar Sampul</Form.Label>
-                  <div className="mb-3 bg-light rounded d-flex align-items-center justify-content-center border" style={{ height: '200px', overflow: 'hidden' }}>
-                    {imagePreview ? <img src={imagePreview} style={{ width: '100%', height: '100%', objectFit: formData.coverObjectFit }} alt="" /> : <FaCloudUploadAlt className="text-muted fs-1" />}
+                  <div className="mb-3 bg-light rounded d-flex align-items-center justify-content-center border position-relative" style={{ height: '200px', overflow: 'hidden' }}>
+                    {imagePreview ? (
+                      <ProgressiveImage
+                        src={imagePreview}
+                        style={{ width: '100%', height: '100%', objectFit: formData.coverObjectFit }}
+                        alt="Cover"
+                      />
+                    ) : (
+                      <FaCloudUploadAlt className="text-muted fs-1" />
+                    )}
                   </div>
+
+                  {coverImageMetadata && (
+                    <div className="d-flex justify-content-between align-items-center mt-n2 mb-2">
+                      <span className="text-muted small">
+                        {formatBytes(coverImageMetadata.sizeBytes)} .{coverImageMetadata.fileExtension}
+                      </span>
+                      {needsReconversion && (
+                        <Button variant="outline-warning" size="sm" onClick={handleReconvertClick} disabled={isReconverting}>
+                          {isReconverting ? <Spinner size="sm" /> : <FaSyncAlt />}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+
                   <input type="file" id="news-img" className="d-none" accept="image/*" onChange={handleImageChange} />
                   <Button onClick={() => document.getElementById('news-img')?.click()} variant="outline-success" size="sm" className="w-100 mb-3">Pilih Gambar</Button>
                   
@@ -201,6 +316,21 @@ const NewsForm: React.FC = () => {
           </Row>
         </Form>
       </Container>
+
+      <Modal show={showPreviewModal} onHide={() => setShowPreviewModal(false)} centered contentClassName="bg-transparent border-0">
+        <Modal.Header closeButton closeVariant="white" className="border-0"></Modal.Header>
+        <Modal.Body className="text-center">
+          {reconvertedPreviewUrl && <img src={reconvertedPreviewUrl} className="img-fluid rounded shadow-lg" alt="Preview Konversi" />}
+          <p className="text-white small mt-3">Pratinjau hasil konversi. Ukuran file baru: {reconvertedBlob ? formatBytes(reconvertedBlob.size) : '0 Bytes'}</p>
+        </Modal.Body>
+        <Modal.Footer className="border-0 justify-content-center">
+          <Button variant="light" onClick={() => setShowPreviewModal(false)}>Batal</Button>
+          <Button variant="success" onClick={handleSaveReconvertedImage} disabled={isReconverting}>
+            {isReconverting ? <Spinner size="sm" /> : "Simpan & Ganti Gambar"}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
     </DashboardLayout>
   );
 };

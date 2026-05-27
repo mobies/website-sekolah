@@ -3,6 +3,7 @@ import { Container, Card, Button, Table } from 'react-bootstrap';
 import { Link, useLocation } from 'react-router-dom';
 import { FaPlus, FaEdit, FaTrash, FaUndo, FaImages } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
+import ProgressiveImage from '../../components/ProgressiveImage'; // Added
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef, logActivity, updateCounter } from '../../firebase/utils';
 import { onValue, update, serverTimestamp } from 'firebase/database';
@@ -65,7 +66,7 @@ const GalleryList: React.FC = () => {
 
   const handleDelete = async (album: Album) => {
     if (!tenantId) return;
-    const result = await showConfirm('Hapus Album?', `Album "${album.title}" akan dipindahkan ke sampah.`);
+    const result = await showConfirm('Hapus Album?', `Album "${album.title}" akan dipindahkan ke folder sampah.`);
     if (result.isConfirmed) {
       try {
         const albumRef = getDBRef(tenantId, `gallery_albums/${album.id}`);
@@ -136,7 +137,12 @@ const GalleryList: React.FC = () => {
                     <tr key={item.id}>
                       <td className="ps-4 py-3">
                         <div className="d-flex align-items-center">
-                          <img src={item.coverImage || 'https://via.placeholder.com/50'} alt="" className="rounded me-3" style={{ width: '45px', height: '45px', objectFit: 'cover' }} />
+                          <ProgressiveImage
+                            src={item.coverImage || 'https://via.placeholder.com/50'}
+                            alt={item.title}
+                            className="rounded me-3"
+                            style={{ width: '45px', height: '45px', objectFit: 'cover' }}
+                          />
                           <div>
                             <span className="fw-bold text-dark d-block small">{item.title}</span>
                             <span className="text-muted extra-small d-block text-truncate" style={{ maxWidth: '300px' }}>{item.description}</span>

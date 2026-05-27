@@ -1,6 +1,9 @@
 # AI_RULES - Panduan Pengembangan Proyek Sekolah
 
-Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website MTs Negeri 1 Garut.
+Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website Sekolah.
+
+## 0. Profesionalisme AI Agent
+- **Peran & Tanggung Jawab:** Sebagai AI programmer tingkat produksi, saya akan bekerja secara profesional, hati-hati, dan menjaga kualitas aplikasi yang sudah ada. Saya DILARANG merusak atau mengubah alur aplikasi yang sudah dibuat kecuali diperintahkan secara eksplisit oleh Anda.
 
 ## 1. Arsitektur Frontend
 - **SPA Only:** Gunakan Single Page Application (React/Vue).
@@ -26,6 +29,7 @@ Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website M
 ## 5. Penyimpanan File
 - **Firebase Storage:** Gunakan Firebase Storage untuk gambar dan file statis secara default.
 - **S3:** Gunakan S3 hanya jika kredensial sudah disiapkan oleh user.
+- **Hapus File Lama (Wajib):** Saat melakukan edit data yang menyertakan gambar (contoh: foto staf, sampul berita), jika gambar diubah, maka file gambar yang lama **wajib dihapus** dari Firebase Storage untuk menghemat ruang penyimpanan. Proses penghapusan tidak boleh mengganggu proses update data jika gagal.
 
 ## 6. Efisiensi Biaya (Cost Efficiency)
 - **Firebase Billing:** Selalu prioritaskan metode yang paling hemat biaya.
@@ -38,10 +42,12 @@ Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website M
   - Jenjang **SD, SMP, SMA, SMK**: Gunakan istilah **Sekolah**, **Siswa**, dan **Kepala Sekolah**.
 - **Konsistensi UI:** Seluruh label, placeholder, dan konten teks harus merujuk pada terminologi dinamis ini agar sesuai dengan identitas tenant.
 
-## 8. Optimalisasi Asset (Wajib)
-- **WebP Only:** Semua gambar yang diunggah harus dikonversi ke format **WebP** di sisi klien menggunakan utility yang tersedia (`convertToWebP`).
-- **Resolusi Maksimum:** Ukuran gambar maksimum adalah **1200x800 pixel**. Utility harus melakukan resizing otomatis jika melebihi batas ini dengan tetap menjaga aspek rasio.
-- **Kompresi:** Gunakan kualitas **70% (0.7)**. Setelah dikompresi, pastikan ukuran file akhir **maksimum 200KB**. Jika masih di atas 200KB, lakukan kompresi ulang secara iteratif hingga ukuran di bawah 200KB.
+## 8. Gambar & Aset (Wajib)
+- **Konversi & Kompresi:** Semua gambar yang diunggah wajib dikonversi ke format **WebP** dengan kualitas **70%**.
+- **Resolusi Maksimum:** Resolusi gambar tidak boleh melebihi **1200x800 piksel**. Aspek rasio harus dijaga saat resizing.
+- **Ukuran File:** Ukuran file akhir setelah kompresi tidak boleh melebihi **100KB**.
+- **Fitur Rekonversi:** Jika ada gambar yang tidak sesuai (bukan WebP atau >100KB), sediakan tombol untuk melakukan rekonversi.
+- **Penerapan:** Aturan ini berlaku untuk semua jenis unggahan gambar, termasuk logo, foto profil, sampul berita, dan galeri. Gunakan fungsi `convertToWebP` yang tersedia.
 
 ## 9. Dokumentasi Path Data (Wajib)
 - **AI_DB_PATH Update:** Setiap kali Agent AI membuat path penyimpanan baru di RTDB atau Firebase Storage, path tersebut WAJIB dicatat dalam file `AI_DB_PATH.md` beserta deskripsi singkatnya.

@@ -27,11 +27,12 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, redire
         
         // 2. Admin Verification check from Session Storage
         // This avoids calling the DB/Cloud Function on every page navigation
-        const isVerified = sessionStorage.getItem(`admin_verified_${tenantId}`) === 'true';
+        const isTenantAdminVerified = sessionStorage.getItem(`admin_verified_${tenantId}`) === 'true';
+        const isOwnerVerified = sessionStorage.getItem('owner_verified') === 'true';
         
-        // If logged in via Firebase but not verified as Admin for THIS tenant,
+        // If logged in via Firebase but not verified as Admin/Owner, 
         // we force them to go to the login page to trigger the Cloud Function check.
-        setAuthenticated(isAuth && isVerified);
+        setAuthenticated(isAuth && (isTenantAdminVerified || isOwnerVerified));
       } else {
         setAuthenticated(false);
       }

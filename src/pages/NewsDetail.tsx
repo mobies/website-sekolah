@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ref, get } from 'firebase/database';
+import { ref, get, update } from 'firebase/database';
 import { rtdb as database } from '../firebase/config';
 import { useTenant } from '../firebase/TenantContext';
-import { FaShareAlt } from 'react-icons/fa';
+import { useEditor } from '../firebase/useEditor';
+import { FaShareAlt, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
+import { Button, Modal } from 'react-bootstrap';
+import { showAlert, toast } from '../utils/alerts';
+import { getDBRef, logActivity } from '../firebase/utils';
 
 interface NewsItem {
   id: string;
@@ -15,15 +19,22 @@ interface NewsItem {
   date: string;
   category?: string;
   deleted?: boolean;
+  coverObjectFit?: 'cover' | 'contain' | 'fill';
 }
 
 const NewsDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { tenantId, terms } = useTenant();
+  const { isEditor } = useEditor();
   const [news, setNews] = useState<NewsItem | null>(null);
   const [searchIndex, setSearchIndex] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -128,6 +139,45 @@ const NewsDetail: React.FC = () => {
     }
   };
 
+  const handleEditClick = () => {
+    setEditTitle(news!.title);
+    setEditContent(news!.content);
+    setHasChanges(false);
+    setShowEditModal(true);
+  };
+
+  const handleEditChange = () => {
+    setHasChanges(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!tenantId || !id || !news) return;
+    setIsSaving(true);
+    try {
+      const updateData = {
+        title: editTitle,
+        content: editContent,
+        updatedAt: Date.now()
+      };
+      
+      await update(getDBRef(tenantId, `news/${id}`), updateData);
+      await update(getDBRef(tenantId, `news_search_index/${id}`), { 
+        t: editTitle.toLowerCase(),
+        title: editTitle 
+      });
+      await logActivity(tenantId, { action: 'EDIT', target: 'BERITA', title: editTitle });
+      
+      setNews(prev => prev ? { ...prev, title: editTitle, content: editContent } : null);
+      setShowEditModal(false);
+      toast.fire({ icon: 'success', title: 'Berita berhasil diperbarui' });
+    } catch (error: any) {
+      console.error('Error saving news:', error);
+      showAlert('Gagal', error.message || 'Tidak dapat menyimpan berita.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="container my-5">
       <nav aria-label="breadcrumb">
@@ -152,14 +202,20 @@ const NewsDetail: React.FC = () => {
               </div>
               <h1 className="fw-bold mb-3 display-6 text-dark">{news.title}</h1>
               
-              {/* Simplified Share Button */}
               <div className="mb-4 pb-3 border-bottom">
-                <button 
-                  onClick={handleShare}
-                  className="btn btn-success rounded-pill px-4 d-flex align-items-center gap-2 fw-bold shadow-sm"
-                >
-                  <FaShareAlt /> Bagikan
-                </button>
+                <div className="d-flex gap-2">
+                  {isEditor && (
+                    <Button onClick={handleEditClick} variant="warning" className="rounded-pill px-4 d-flex align-items-center gap-2 fw-bold shadow-sm">
+                      <FaEdit /> Inline Edit
+                    </Button>
+                  )}
+                  <button 
+                    onClick={handleShare}
+                    className="btn btn-success rounded-pill px-4 d-flex align-items-center gap-2 fw-bold shadow-sm"
+                  >
+                    <FaShareAlt /> Bagikan
+                  </button>
+                </div>
               </div>
 
               <div className="d-flex align-items-center text-muted mb-4 pb-3 border-bottom">
@@ -174,7 +230,6 @@ const NewsDetail: React.FC = () => {
             </div>
           </div>
 
-          {/* Bagian Berita Terkait (Hemat Bandwidth) */}
           <section className="mt-5 pt-4">
             <div className="d-flex justify-content-between align-items-center mb-4">
               <h3 className="fw-bold mb-0 border-start border-4 border-success ps-3">Berita Terkait</h3>
@@ -226,11 +281,69 @@ const NewsDetail: React.FC = () => {
         .news-content p { margin-bottom: 1.5rem; }
         .bg-success-subtle { background-color: #e1f2e9; }
         .x-small { font-size: 0.75rem; }
+        .editor-content {
+          border: 2px solid #dee2e6;
+          border-radius: 8px;
+          padding: 16px;
+          min-height: 300px;
+          max-height: 500px;
+          overflow-y: auto;
+          line-height: 1.6;
+          font-size: 1rem;
+        }
+        .editor-content:focus {
+          outline: none;
+          border-color: #198754;
+          box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25);
+        }
       `}</style>
+
+      <Modal show={showEditModal} onHide={() => setShowEditModal(false)} size="lg" centered>
+        <Modal.Header closeButton>
+          <Modal.Title>Inline Edit Berita</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="mb-3">
+            <label className="form-label fw-bold">Judul</label>
+            <input 
+              type="text" 
+              className="form-control" 
+              value={editTitle}
+              onChange={(e) => { setEditTitle(e.target.value); handleEditChange(); }}
+              placeholder="Judul berita"
+            />
+          </div>
+          <div className="mb-3">
+            <label className="form-label fw-bold">Konten</label>
+            <div 
+              className="editor-content"
+              contentEditable
+              suppressContentEditableWarning
+              onInput={(e) => { setEditContent(e.currentTarget.innerHTML); handleEditChange(); }}
+              dangerouslySetInnerHTML={{ __html: editContent }}
+            />
+            <small className="text-muted d-block mt-2">Anda dapat mengedit teks langsung. HTML tags akan dipertahankan.</small>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="light" onClick={() => setShowEditModal(false)} disabled={isSaving}>
+            <FaTimes className="me-2" /> Batal
+          </Button>
+          {hasChanges && (
+            <Button 
+              variant="success" 
+              onClick={handleSaveEdit} 
+              disabled={isSaving}
+              className="d-flex align-items-center gap-2"
+            >
+              {isSaving ? <span className="spinner-border spinner-border-sm me-2" /> : <FaSave className="me-2" />}
+              {isSaving ? 'Menyimpan...' : 'Simpan Perubahan'}
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
     </div>
   );
 };
 
-
 export default NewsDetail;
-

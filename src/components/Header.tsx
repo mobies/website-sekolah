@@ -44,13 +44,14 @@ const Header: React.FC = () => {
   const [authLoading, setAuthLoading] = useState(true);
   const [verifying, setVerifying] = useState(false);
 
-  const verifyAdmin = async (tId: string) => {
+  const verifyAccess = async (tId: string) => {
     setVerifying(true);
     try {
       const verifyRole = httpsCallable(functions, 'verifyAdminRole');
       const result = await verifyRole({ tenantId: tId });
       const data = result.data as any;
-      if (data && data.isValid) {
+      // Allow access if role is 'admin' or 'owner'
+      if (data && data.isValid && (data.role === 'admin' || data.role === 'owner')) {
         sessionStorage.setItem(`admin_verified_${tId}`, 'true');
         setIsAdmin(true);
       } else {
@@ -58,7 +59,7 @@ const Header: React.FC = () => {
         setIsAdmin(false);
       }
     } catch (err) {
-      console.error("Admin verification error:", err);
+      console.error("Access verification error:", err);
     } finally {
       setVerifying(false);
     }
@@ -72,7 +73,7 @@ const Header: React.FC = () => {
         if (verified) {
           setIsAdmin(true);
         } else {
-          verifyAdmin(tenantId);
+          verifyAccess(tenantId);
         }
       } else {
         setIsAdmin(false);
@@ -89,7 +90,7 @@ const Header: React.FC = () => {
       const result = await signInWithPopup(auth, googleProvider);
       if (result.user) {
         toast.fire({ icon: 'success', title: 'Berhasil masuk' });
-        await verifyAdmin(tenantId);
+        await verifyAccess(tenantId);
       }
     } catch (error: any) {
       if (error.code !== 'auth/popup-closed-by-user') {

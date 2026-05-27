@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Carousel, Button, Container } from 'react-bootstrap';
+import { Carousel, Container } from 'react-bootstrap';
 import { useTenant } from '../firebase/TenantContext';
 import { getDBRef } from '../firebase/utils';
 import { onValue } from 'firebase/database';
@@ -10,6 +10,7 @@ interface Slide {
   url: string;
   title: string;
   subtitle: string;
+  objectFit?: 'cover' | 'contain' | 'fill';
 }
 
 const Hero: React.FC = () => {
@@ -21,25 +22,26 @@ const Hero: React.FC = () => {
     const settingsRef = getDBRef(tenantId, 'settings/heroSlides');
     const unsubscribe = onValue(settingsRef, (snapshot) => {
       const data = snapshot.val();
-      if (data) {
-        const validSlides = Object.values(data).filter((slide: any) => 
-          slide && 
-          typeof slide === 'object' && 
-          slide.id &&
-          slide.url && 
-          slide.url.startsWith('http')
-        );
-        setSlides(validSlides as Slide[]);
+      let rawSlides: Slide[] = [];
+
+      if (data && data.length > 0) {
+        rawSlides = data;
+      } else if (data) { // Handle object structure from Firebase
+        rawSlides = Object.values(data).filter((slide: any) =>
+          slide && typeof slide === 'object' && slide.id && slide.url
+        ) as Slide[];
       } else {
-        setSlides([
+        rawSlides = [
           {
             id: '1',
             url: 'https://images.unsplash.com/photo-1523050335392-9bef867a0578?q=80&w=1920&auto=format&fit=crop',
             title: 'Selamat Datang',
-            subtitle: 'Madrasah Tsanawiyah Negeri 1 Garut'
+            subtitle: 'Madrasah Tsanawiyah Negeri 1 Garut',
+            objectFit: 'cover'
           }
-        ]);
+        ];
       }
+      setSlides(rawSlides);
     });
     return () => unsubscribe();
   }, [tenantId]);
@@ -72,7 +74,6 @@ const Hero: React.FC = () => {
                 <Container className="text-center">
                   <h1 className="display-3 fw-bold mb-3 animate-up">{slide.title}</h1>
                   <p className="lead mb-4 fs-4 animate-up-delayed">{slide.subtitle}</p>
-                  
                 </Container>
               </div>
             </div>

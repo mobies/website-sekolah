@@ -93,7 +93,7 @@ const Footer: React.FC = () => {
           {/* School Profile */}
           <Col lg={4} md={6}>
             <h5 className="text-success fw-bold mb-4">{schoolInfo.schoolName}</h5>
-            <p className="small text-muted mb-4" style={{ lineHeight: '1.8' }}>
+            <p className="small text-white mb-4" style={{ lineHeight: '1.8' }}>
               {schoolInfo.description || `${schoolInfo.tagline}. Lembaga pendidikan formal yang berkomitmen mencetak generasi unggul dalam prestasi dan berakhlakul karimah.`}
             </p>
             <div className="d-flex gap-3">
@@ -173,15 +173,15 @@ const Footer: React.FC = () => {
             <ul className="list-unstyled footer-contact">
               <li className="d-flex mb-3">
                 <FaMapMarkerAlt className="text-success mt-1 me-3 flex-shrink-0" />
-                <span className="small text-muted">{schoolInfo.contact?.address || 'Alamat belum diatur'}</span>
+                <span className="small text-white">{schoolInfo.contact?.address || 'Alamat belum diatur'}</span>
               </li>
               <li className="d-flex mb-3">
                 <FaPhone className="text-success mt-1 me-3 flex-shrink-0" />
-                <span className="small text-muted">{schoolInfo.contact?.phone || 'Telepon belum diatur'}</span>
+                <span className="small text-white">{schoolInfo.contact?.phone || 'Telepon belum diatur'}</span>
               </li>
               <li className="d-flex mb-3">
                 <FaEnvelope className="text-success mt-1 me-3 flex-shrink-0" />
-                <span className="small text-muted text-break">{schoolInfo.contact?.email || 'Email belum diatur'}</span>
+                <span className="small text-white text-break">{schoolInfo.contact?.email || 'Email belum diatur'}</span>
               </li>
             </ul>
           </Col>
@@ -191,12 +191,12 @@ const Footer: React.FC = () => {
         
         <Row className="align-items-center">
           <Col md={6} className="text-center text-md-start">
-            <p className="small text-muted mb-0">
+            <p className="small text-white mb-0">
               &copy; {new Date().getFullYear()} <span className="text-white">{schoolInfo.schoolName}</span>. All Rights Reserved.
             </p>
           </Col>
           <Col md={6} className="text-center text-md-end mt-3 mt-md-0">
-            <p className="small text-muted mb-0">
+            <p className="small text-white mb-0">
               Developed with <span className="text-danger">❤</span> by <a href="#" className="text-decoration-none text-warning fw-bold hover-warning">dibuat untuk pendidikan indonesia</a>
             </p>
           </Col>
@@ -208,7 +208,7 @@ const Footer: React.FC = () => {
           margin-bottom: 0.75rem;
         }
         .footer-links a {
-          color: #adb5bd;
+          color: #ffffff;
           text-decoration: none;
           font-size: 0.9rem;
           transition: all 0.2s ease;
@@ -218,7 +218,7 @@ const Footer: React.FC = () => {
           padding-left: 5px;
         }
         .social-icon {
-          color: #adb5bd;
+          color: #ffffff;
           transition: all 0.2s ease;
           display: inline-block;
         }

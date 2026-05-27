@@ -5,7 +5,7 @@ import { getDBRef } from './utils';
 interface Terminology {
   school: string;     // Sekolah or Madrasah
   student: string;    // Siswa or Santri
-  headmaster: string; // Kepala Sekolah or Kepala Madrasah
+  headmaster: string; // Kepala Lembaga or Kepala Madrasah
   berita: string;     // Berita or Kabar
 }
 
@@ -29,7 +29,7 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [terms] = useState<Terminology>({
     school: 'Sekolah',
     student: 'Siswa',
-    headmaster: 'Kepala Sekolah',
+    headmaster: 'Kepala Lembaga',
     berita: 'Berita'
   });
 

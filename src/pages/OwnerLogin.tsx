@@ -18,12 +18,22 @@ const OwnerLogin: React.FC = () => {
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
+        const isOwnerVerifiedInSession = sessionStorage.getItem('owner_verified') === 'true';
+
+        if (isOwnerVerifiedInSession) {
+          console.log("DEBUG: Owner already verified in session.");
+          navigate('/owner');
+          setLoading(false);
+          return;
+        }
+
         setVerifying(true);
         try {
           const checkOwner = httpsCallable(functions, 'authIsOwnerValid');
           const result = await checkOwner() as { data: { isValid: boolean } };
           
           if (result.data.isValid) {
+            sessionStorage.setItem('owner_verified', 'true'); // Set session flag
             toast.fire({ icon: 'success', title: 'Akses Owner Terverifikasi' });
             navigate('/owner');
           } else {
@@ -38,8 +48,10 @@ const OwnerLogin: React.FC = () => {
         } finally {
           setVerifying(false);
         }
+      } else {
+        sessionStorage.removeItem('owner_verified'); // Clear session flag on logout
+        setLoading(false);
       }
-      setLoading(false);
     });
     return () => unsubscribe();
   }, [navigate]);

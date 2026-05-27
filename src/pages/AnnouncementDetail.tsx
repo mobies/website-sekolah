@@ -3,8 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import { ref, get } from 'firebase/database';
 import { rtdb as database } from '../firebase/config';
 import { useTenant } from '../firebase/TenantContext';
+import { useEditor } from '../firebase/useEditor';
 import { Spinner, Card, Container, Row, Col, Button } from 'react-bootstrap';
-import { FaCalendarDay, FaArrowLeft, FaShareAlt } from 'react-icons/fa';
+import { FaCalendarDay, FaArrowLeft, FaShareAlt, FaEdit } from 'react-icons/fa';
 
 interface AnnouncementItem {
   id: string;
@@ -17,6 +18,7 @@ interface AnnouncementItem {
 const AnnouncementDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { tenantId } = useTenant();
+  const { isEditor } = useEditor();
   const [data, setData] = useState<AnnouncementItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -73,9 +75,14 @@ const AnnouncementDetail: React.FC = () => {
             </div>
             <Card.Body className="p-4 p-md-5">
               <div className="announcement-content mb-5" style={{ lineHeight: '1.8', fontSize: '1.1rem', whiteSpace: 'pre-wrap', color: '#444' }}>{data.content}</div>
-              <div className="d-flex justify-content-between align-items-center border-top pt-4">
+              <div className="d-flex justify-content-between align-items-center border-top pt-4 gap-2 flex-wrap">
                 <Button variant="outline-secondary" onClick={() => window.history.back()} className="rounded-pill px-4 btn-sm"><FaArrowLeft className="me-2" /> Kembali</Button>
-                <Button variant="success" onClick={handleShare} className="rounded-pill px-4 btn-sm fw-bold"><FaShareAlt className="me-2" /> Bagikan</Button>
+                <div className="d-flex gap-2">
+                  {isEditor && (
+                    <Button as={Link as any} to={`/dashboard/pengumuman/${id}`} variant="warning" className="rounded-pill px-4 btn-sm fw-bold"><FaEdit className="me-2" /> Edit</Button>
+                  )}
+                  <Button variant="success" onClick={handleShare} className="rounded-pill px-4 btn-sm fw-bold"><FaShareAlt className="me-2" /> Bagikan</Button>
+                </div>
               </div>
             </Card.Body>
           </Card>

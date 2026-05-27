@@ -2,9 +2,11 @@ import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { ref, query, orderByChild, limitToLast, get, endAt, onValue } from 'firebase/database';
 import { rtdb as database } from '../firebase/config';
 import { useTenant } from '../firebase/TenantContext';
+import { useEditor } from '../firebase/useEditor';
 import { Link } from 'react-router-dom';
 import ProgressiveImage from '../components/ProgressiveImage';
 import { Form, Row, Col, InputGroup, Button, Spinner } from 'react-bootstrap';
+import { FaPlus } from 'react-icons/fa';
 
 interface NewsItem {
   id: string;
@@ -17,19 +19,21 @@ interface NewsItem {
   c?: string; // Category code from index
   category?: string; // Full data
   deleted?: boolean;
+  status?: 'published' | 'draft';
+  coverObjectFit?: 'cover' | 'contain' | 'fill';
 }
 
-const PAGE_SIZE = 4;
+const PAGE_SIZE = 10;
 
 const NewsListPublic: React.FC = () => {
   const { tenantId, terms } = useTenant();
+  const { isEditor } = useEditor();
   const [newsList, setNewsList] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [lastDate, setLastDate] = useState<string | null>(null);
   
-  // Search & Archive states
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -37,7 +41,8 @@ const NewsListPublic: React.FC = () => {
   const [searchIndex, setSearchIndex] = useState<any>(null);
   const [archiveStats, setArchiveStats] = useState<any>(null);
 
-  // 1. Initial Load & Pagination Logic
+  const isAnyFilterActive = !!(searchTerm || startDate || endDate || selectedCategory);
+
   const fetchNews = useCallback(async (isInitial = false) => {
     if (!tenantId) return;
     if (!isInitial && (!hasMore || loadingMore)) return;
@@ -46,14 +51,10 @@ const NewsListPublic: React.FC = () => {
     else setLoadingMore(true);
 
     try {
-      let newsQuery;
       const baseRef = ref(database, `tenants/${tenantId}/news`);
-      
-      if (isInitial) {
-        newsQuery = query(baseRef, orderByChild('date'), limitToLast(PAGE_SIZE));
-      } else {
-        newsQuery = query(baseRef, orderByChild('date'), endAt(lastDate!), limitToLast(PAGE_SIZE + 1));
-      }
+      const newsQuery = isInitial
+        ? query(baseRef, orderByChild('date'), limitToLast(PAGE_SIZE))
+        : query(baseRef, orderByChild('date'), endAt(lastDate!), limitToLast(PAGE_SIZE + 1));
 
       const snapshot = await get(newsQuery);
       const data = snapshot.val();
@@ -61,24 +62,23 @@ const NewsListPublic: React.FC = () => {
       if (data) {
         let loadedItems: NewsItem[] = Object.keys(data)
           .map(key => ({ id: key, ...data[key] }))
-          .filter(item => !item.deleted)
+          .filter(item => !item.deleted && item.status === 'published')
           .sort((a, b) => b.date.localeCompare(a.date));
 
-        if (!isInitial) {
-          loadedItems = loadedItems.filter(item => item.date <= lastDate! && !newsList.find(existing => existing.id === item.id));
+        if (!isInitial && lastDate) {
+          loadedItems = loadedItems.filter(item => item.date < lastDate);
         }
-
+        
         if (loadedItems.length === 0) {
           setHasMore(false);
         } else {
-          if (isInitial) setNewsList(loadedItems);
-          else setNewsList(prev => [...prev, ...loadedItems]);
-          
+          setNewsList(prev => isInitial ? loadedItems : [...prev, ...loadedItems]);
           setLastDate(loadedItems[loadedItems.length - 1].date);
           if (loadedItems.length < PAGE_SIZE) setHasMore(false);
         }
       } else {
         setHasMore(false);
+        if (isInitial) setNewsList([]);
       }
     } catch (err) {
       console.error('Error fetching news:', err);
@@ -86,18 +86,16 @@ const NewsListPublic: React.FC = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [tenantId, hasMore, loadingMore, lastDate, newsList]);
+  }, [tenantId, hasMore, loadingMore, lastDate]);
 
   useEffect(() => { fetchNews(true); }, [tenantId]);
 
-  // 2. Search Index Loader
   useEffect(() => {
-    if (tenantId && (searchTerm || startDate || endDate || selectedCategory) && !searchIndex) {
+    if (tenantId && isAnyFilterActive && !searchIndex) {
       get(ref(database, `tenants/${tenantId}/news_search_index`)).then(snap => setSearchIndex(snap.val() || {}));
     }
-  }, [searchTerm, startDate, endDate, selectedCategory, tenantId, searchIndex]);
+  }, [tenantId, isAnyFilterActive, searchIndex]);
 
-  // 3. Archive & Category Stats Loader
   useEffect(() => {
     if (!tenantId) return;
     onValue(ref(database, `tenants/${tenantId}/stats/news`), snap => {
@@ -105,16 +103,15 @@ const NewsListPublic: React.FC = () => {
     });
   }, [tenantId]);
 
-  // 4. Infinite Scroll Handler
   useEffect(() => {
     const handleScroll = () => {
-      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500 && !searchTerm && !startDate && !endDate && !selectedCategory) {
+      if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500 && !isAnyFilterActive) {
         fetchNews();
       }
     };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [fetchNews, searchTerm, startDate, endDate, selectedCategory]);
+  }, [fetchNews, isAnyFilterActive]);
 
   const filteredResults = useMemo(() => {
     if (!searchIndex) return [];
@@ -133,24 +130,29 @@ const NewsListPublic: React.FC = () => {
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
   if (loading) return <div className="text-center my-5 py-5"><Spinner animation="border" variant="success" /></div>;
-
-  const isAnyFilterActive = !!(searchTerm || startDate || endDate || selectedCategory);
+  
+  const displayList = isAnyFilterActive ? filteredResults : newsList;
 
   return (
     <div className="container my-5">
       <div className="row">
-        {/* KOLOM KIRI: DAFTAR BERITA */}
         <div className="col-lg-8">
           <div className="d-flex justify-content-between align-items-center mb-4">
             <h2 className="fw-bold mb-0">Daftar {terms.berita || 'Berita'}</h2>
-            {isAnyFilterActive && (
-              <Button variant="link" className="text-success p-0 text-decoration-none" onClick={() => { setSearchTerm(''); setStartDate(''); setEndDate(''); setSelectedCategory(''); }}>
-                <i className="bi bi-x-circle me-1"></i> Reset Filter
-              </Button>
-            )}
+            <div className="d-flex gap-2">
+              {isEditor && (
+                <Button as={Link as any} to="/dashboard/berita" variant="success" className="rounded-pill fw-bold px-4 shadow-sm" size="sm">
+                  <FaPlus className="me-2" /> Tambah {terms.berita || 'Berita'}
+                </Button>
+              )}
+              {isAnyFilterActive && (
+                <Button variant="link" className="text-success p-0 text-decoration-none" onClick={() => { setSearchTerm(''); setStartDate(''); setEndDate(''); setSelectedCategory(''); }}>
+                  <i className="bi bi-x-circle me-1"></i> Reset Filter
+                </Button>
+              )}
+            </div>
           </div>
 
-          {/* Search Bar - Expanded for Category */}
           <div className="card border-0 shadow-sm rounded-4 p-3 mb-4 bg-light">
             <Row className="g-2">
               <Col md={12}>
@@ -188,74 +190,61 @@ const NewsListPublic: React.FC = () => {
             </Row>
           </div>
 
-          {/* Content Area */}
           <div className="news-list">
-            {isAnyFilterActive ? (
-              filteredResults.length === 0 ? (
+            {displayList.length === 0 ? (
                 <div className="text-center py-5 text-muted card border-0 bg-light rounded-4">
                   <i className="bi bi-search-heart display-4 mb-3 opacity-25"></i>
-                  <p>Tidak ada berita yang cocok dengan filter tersebut.</p>
+                  <p>Tidak ada berita yang cocok.</p>
                 </div>
               ) : (
-                filteredResults.map(item => (
-                  <Link key={item.id} to={`/berita/${item.id}`} className="text-decoration-none text-dark mb-3 d-block card-row">
-                    <div className="card border-0 shadow-sm rounded-3 p-3 h-100 hover-lift d-flex flex-row justify-content-between align-items-center">
-                      <div>
-                        <div className="d-flex align-items-center gap-2 mb-1">
-                          <span className="badge bg-success-subtle text-success x-small text-uppercase">{item.c || 'Berita'}</span>
-                          <small className="text-muted" style={{ fontSize: '0.75rem' }}>{new Date(item.date).toLocaleDateString('id-ID')}</small>
-                        </div>
-                        <h6 className="fw-bold mb-0" style={{ fontSize: '0.8rem' }}>{item.title}</h6>
-                      </div>
-                      <i className="bi bi-chevron-right text-success opacity-50"></i>
-                    </div>
-                  </Link>
-                ))
-              )
-            ) : (
-              <>
-                {newsList.map((news) => (
-                  <div key={news.id} className="card border-0 shadow-sm rounded-4 overflow-hidden mb-4 hover-lift">
+                displayList.map((item) => (
+                  <div key={item.id} className="card border-0 shadow-sm rounded-4 overflow-hidden mb-4 hover-lift">
                     <div className="row g-0">
                       <div className="col-md-4">
-                        <div style={{ height: '180px' }}>
+                        <Link to={`/berita/${item.id}`} style={{ height: '100%', display: 'block' }}>
                           <ProgressiveImage 
-                              src={news.thumbnail || news.imageUrl || 'https://images.unsplash.com/photo-1585829365234-781f8c484dca?q=80&w=400&h=250&fit=crop'} 
-                              alt={news.title} 
+                              src={item.thumbnail || item.imageUrl || 'https://images.unsplash.com/photo-1585829365234-781f8c484dca?q=80&w=400&h=250&fit=crop'} 
+                              alt={item.title} 
                               className="w-100 h-100" 
-                              style={{ objectFit: news.coverObjectFit || 'cover' }} 
+                              style={{ objectFit: item.coverObjectFit || 'cover', minHeight: '180px' }} 
                             />
-                        </div>
+                        </Link>
                       </div>
                       <div className="col-md-8">
                         <div className="card-body d-flex flex-column h-100 p-4">
                           <div className="mb-2">
-                             <span className="badge bg-success-subtle text-success x-small text-uppercase">{news.category || 'Berita'}</span>
+                             <span className="badge bg-success-subtle text-success x-small text-uppercase">{item.category || item.c || 'Berita'}</span>
                           </div>
-                          <h4 className="card-title fw-bold mb-2">{news.title}</h4>
-                          <p className="text-muted small mb-3 flex-grow-1" style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                            {news.content.replace(/<[^>]*>?/gm, '')}
+                          <h5 className="card-title fw-bold mb-2">
+                            <Link to={`/berita/${item.id}`} className="text-dark text-decoration-none">{item.title}</Link>
+                          </h5>
+                          <p className="text-muted small mb-3 flex-grow-1 text-truncate-2">
+                            {item.content?.replace(/<[^>]*>?/gm, '') || ''}
                           </p>
                           <div className="mt-auto d-flex justify-content-between align-items-center pt-2 border-top">
-                            <small className="text-muted"><i className="bi bi-calendar3 me-1"></i> {new Date(news.date || news.createdAt).toLocaleDateString('id-ID')}</small>
-                            <Link to={`/berita/${news.id}`} className="btn btn-sm btn-success rounded-pill px-4">Baca &raquo;</Link>
+                            <small className="text-muted"><i className="bi bi-calendar3 me-1"></i> {new Date(item.date || item.createdAt).toLocaleDateString('id-ID')}</small>
+                            <div className="d-flex gap-2">
+                              {isEditor && (
+                                <Button as={Link as any} to={`/dashboard/berita/${item.id}`} size="sm" variant="outline-warning" className="rounded-pill px-3">
+                                  <i className="bi bi-pencil-square me-1"></i> Edit
+                                </Button>
+                              )}
+                              <Link to={`/berita/${item.id}`} className="btn btn-sm btn-success rounded-pill px-4">Baca &raquo;</Link>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                ))}
-                {loadingMore && <div className="text-center py-4"><Spinner size="sm" variant="success" /></div>}
-                {!hasMore && newsList.length > 0 && <div className="text-center py-4 text-muted small italic">Semua berita telah ditampilkan.</div>}
-              </>
+                ))
             )}
+            {!isAnyFilterActive && loadingMore && <div className="text-center py-4"><Spinner size="sm" variant="success" /></div>}
+            {!isAnyFilterActive && !hasMore && newsList.length > 0 && <div className="text-center py-4 text-muted small italic">Semua berita telah ditampilkan.</div>}
           </div>
         </div>
 
-        {/* KOLOM KANAN: SIDEBAR ARSIP & KATEGORI */}
         <div className="col-lg-4 ps-lg-5">
           <div className="sticky-top" style={{ top: '2rem' }}>
-            {/* KATEGORI FILTER */}
             <div className="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
               <h5 className="fw-bold mb-4 border-start border-4 border-success ps-3">Kategori</h5>
               <div className="list-group list-group-flush">
@@ -278,7 +267,6 @@ const NewsListPublic: React.FC = () => {
               </div>
             </div>
 
-            {/* ARSIP BERITA */}
             <div className="card border-0 shadow-sm rounded-4 p-4 mb-4 bg-white">
               <h5 className="fw-bold mb-4 border-start border-4 border-success ps-3">Arsip Berita</h5>
               {archiveStats?.years ? (
@@ -321,6 +309,12 @@ const NewsListPublic: React.FC = () => {
         .card-row:hover { background: #f8f9fa; }
         .bg-success-subtle { background-color: #e1f2e9; }
         .x-small { font-size: 0.7rem; }
+        .text-truncate-2 {
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
       `}</style>
     </div>
   );

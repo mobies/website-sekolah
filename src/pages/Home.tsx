@@ -29,6 +29,12 @@ interface AgendaItem {
   deleted?: boolean;
 }
 
+interface Headmaster {
+  name: string;
+  greeting: string;
+  photo: string;
+}
+
 interface EService {
   id: string;
   title: string;
@@ -48,7 +54,7 @@ const Home: React.FC = () => {
     schoolName: '',
     tagline: '',
     eServicesLayout: 'bento',
-    headmaster: { name: '', greeting: "", photo: '' }
+    headmaster: { name: '', greeting: "", photo: '' } as Headmaster // Cast to Headmaster
   });
   const [loading, setLoading] = useState(true);
 
@@ -117,7 +123,7 @@ const Home: React.FC = () => {
                 {schoolInfo.headmaster.name && (
                   <div className="mt-4 pt-3 border-top d-inline-block">
                     <p className="fw-bold mb-0 text-dark">{schoolInfo.headmaster.name}</p>
-                    <small className="text-muted">{terms.headmaster} {schoolInfo.schoolName}</small>
+                    <small className="text-muted">Kepala {schoolInfo.schoolName}</small>
                   </div>
                 )}
               </Col>
@@ -145,7 +151,7 @@ const Home: React.FC = () => {
                   <ProgressiveImage 
                     src={item.thumbnail || 'https://via.placeholder.com/400x250'} 
                     style={{ height: '200px', objectFit: item.coverObjectFit || 'cover' }} 
-                    alt={item.title} 
+                    alt={item.title}
                   />
                   <Card.Body className="d-flex flex-column">
                     <Card.Text className="text-success small mb-1 fw-bold text-uppercase">{item.category}</Card.Text>

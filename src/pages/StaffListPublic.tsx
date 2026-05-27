@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Container, Row, Col, Card, Spinner, Form, InputGroup, Button, Breadcrumb } from 'react-bootstrap';
+import { Container, Row, Col, Card, Spinner, Form, InputGroup, Button, Breadcrumb, Modal } from 'react-bootstrap';
 import { Link, useLocation } from 'react-router-dom';
 import { FaUserTie, FaSearch } from 'react-icons/fa';
 import ProgressiveImage from '../components/ProgressiveImage';
@@ -31,8 +31,9 @@ const StaffListPublic: React.FC = () => {
   const [hasMore, setHasMore] = useState(true);
   const [lastTimestamp, setLastTimestamp] = useState<number | null>(null);
   const [searchTerm, setSearchTerm] = useState(q);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedImage, setSelectedImage] = useState('');
 
-  // 1. Fetch Staff with Pagination
   const fetchStaff = useCallback(async (isInitial = false) => {
     if (!tenantId || (!isInitial && !hasMore) || loadingMore) return;
     
@@ -58,7 +59,6 @@ const StaffListPublic: React.FC = () => {
           .filter(item => item.isActive && !item.deleted)
           .sort((a, b) => b.createdAt - a.createdAt);
 
-        // Filter out items already in the list if not initial load
         const newItems = isInitial 
           ? items
           : items.filter(item => !staff.some(existingItem => existingItem.id === item.id));
@@ -81,15 +81,14 @@ const StaffListPublic: React.FC = () => {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [tenantId, hasMore, loadingMore, lastTimestamp, staff]); // Added staff to deps for filtering newItems
+  }, [tenantId, hasMore, loadingMore, lastTimestamp, staff]);
 
   useEffect(() => {
     if (!tenantId) return;
     setSearchTerm(q);
-    fetchStaff(true); // Refetch on query change
+    fetchStaff(true);
   }, [tenantId, q]);
 
-  // Infinite Scroll Handler
   useEffect(() => {
     const handleScroll = () => {
       if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 500 && !loading && !loadingMore && !searchTerm) {
@@ -101,15 +100,12 @@ const StaffListPublic: React.FC = () => {
   }, [fetchStaff, loading, loadingMore, searchTerm]);
 
   const filteredStaff = useMemo(() => {
-    let list = staff;
-    if (searchTerm) {
-      list = list.filter(s => 
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        (s.subject && s.subject.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        s.type.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    return list;
+    if (!searchTerm) return staff;
+    return staff.filter(s => 
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      (s.subject && s.subject.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      s.type.toLowerCase().includes(searchTerm.toLowerCase())
+    );
   }, [staff, searchTerm]);
 
   if (loading && filteredStaff.length === 0) return <div className="text-center py-5"><Spinner animation="border" variant="success" /></div>;
@@ -152,7 +148,7 @@ const StaffListPublic: React.FC = () => {
             filteredStaff.map(item => (
               <Col key={item.id} xl={3} lg={4} md={6} sm={6}>
                 <Card className="h-100 border-0 shadow-sm rounded-4 overflow-hidden staff-card-public">
-                  <div className="position-relative staff-image-container-public">
+                  <div className="position-relative staff-image-container-public cursor-pointer" onClick={() => { setSelectedImage(item.photo); setShowModal(true); }}>
                     <ProgressiveImage src={item.photo} alt={item.name} style={{ height: '100%', width: '100%' }} />
                     <div className="position-absolute bottom-0 start-0 w-100 p-2 bg-gradient-dark text-white">
                        <div className="fw-bold small text-truncate" title={item.name}>{item.name}</div>
@@ -172,6 +168,13 @@ const StaffListPublic: React.FC = () => {
         {!hasMore && filteredStaff.length > 0 && <div className="text-center py-4 text-muted small italic">Semua data telah ditampilkan.</div>}
       </Container>
 
+      <Modal show={showModal} onHide={() => setShowModal(false)} centered size="lg" contentClassName="bg-transparent border-0">
+        <Modal.Header closeButton closeVariant="white" className="border-0 p-3"></Modal.Header>
+        <Modal.Body className="p-0 text-center">
+          <img src={selectedImage} className="img-fluid rounded" style={{ maxHeight: '90vh' }} alt="Preview" />
+        </Modal.Body>
+      </Modal>
+
       <style>{`
         .staff-card-public { transition: transform 0.3s ease; }
         .staff-card-public:hover { transform: translateY(-5px); box-shadow: 0 1rem 3rem rgba(0,0,0,0.1) !important; }
@@ -179,6 +182,7 @@ const StaffListPublic: React.FC = () => {
         .bg-gradient-dark { background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); }
         .extra-small { font-size: 0.7rem; }
         .uppercase { text-transform: uppercase; }
+        .cursor-pointer { cursor: pointer; }
       `}</style>
     </div>
   );
