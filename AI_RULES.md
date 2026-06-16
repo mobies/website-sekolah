@@ -14,6 +14,7 @@ Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website S
 - **No Database/Storage Deploy:** DILARANG melakukan deployment untuk aturan Database (`rules`) atau Storage (`rules`) melalui CLI. Seluruh pengaturan keamanan/role wajib dilakukan secara MANUAL langsung melalui Firebase Console untuk menghindari kesalahan penimpaan aturan.
 - **Separate Deployment:** Lakukan deployment untuk Hosting dan Functions secara TERPISAH (Gunakan `--only`).
 - **Surgical Function Deployment (Time Efficiency):** Saat deploy Cloud Functions, HANYA deploy fungsi yang ditambah, diubah, atau dihapus saja (Contoh: `firebase deploy --only functions:namaFungsi`). JANGAN melakukan deploy semua fungsi jika tidak ada perubahan untuk menghemat waktu dan menghindari penghapusan fungsi dari proyek lain.
+- **No Unrequested Commit & Push:** DILARANG melakukan `git commit` atau `git push` kecuali jika diminta secara eksplisit oleh user.
 
 ## 3. Manajemen Halaman
 - **No Unrequested Pages:** Jangan menambah atau mengubah halaman di luar instruksi.
@@ -64,11 +65,39 @@ Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website S
 - **Bahasa yang digunakan:** Gunakan bahasa indonesia dalam berkomunikasi dan menyampaikan output. Gunakan bahasa singkat dan padat tapi jelas untuk menghemat token output.
 
 ## 12. Deteksi Bug & Kualitas Kode (Wajib)
-- **TypeScript Check:** Selalu jalankan `npx tsc --noEmit` secara rutin setelah melakukan perubahan kode yang signifikan atau sebelum menyatakan tugas selesai. Ini bertujuan untuk mendeteksi error sintaksis, kesalahan tipe data, atau referensi yang hilang lebih awal guna menjaga stabilitas aplikasi.
+- **TypeScript Check:** Jalankan `npx tsc --noEmit` HANYA jika ada pengubahan pada kode program (seperti berkas `.ts`, `.tsx`, dll.) setelah melakukan perubahan signifikan atau sebelum menyatakan tugas selesai. Tidak perlu dijalankan jika perubahan hanya pada dokumentasi atau file non-kode.
 
 ## 13. Penanganan Error & Stabilitas (Wajib)
 - **Preservasi UI/Alur:** Jika menemukan error saat build atau runtime, perbaiki error tersebut tanpa mengubah tampilan (UI) atau alur logika yang sudah ada kecuali diminta.
 - **Dilarang Destruktif:** Jangan melakukan perubahan radikal yang membuat aplikasi menjadi kacau, acak-acakan, atau kehilangan fitur yang sudah berfungsi sebelumnya. Fokus pada perbaikan teknis yang presisi.
+
+## 14. Struktur data RTDB (wajib)
+- **Multi Tenant Data:** data memakai pola multi-tenant `tenants/{tenantId}/...`.
+
+## 15. Optimasi Token Output (Wajib Efisiensi)
+- **Komunikasi Singkat:** Gunakan bullet points, tabel, atau numbered lists daripada paragraf panjang.
+- **No Verbose Recap:** Jangan recap seluruh task yang sudah dilakukan kecuali diminta. Cukup informasikan status final.
+- **Action-Focused:** Fokus pada aksi langsung → hasil. Hindari penjelasan panjang yang tidak essential.
+- **Code Comments Over Explanations:** Lebih baik comment code yang jelas daripada explain panjang di chat.
+- **Status Badges:** Gunakan emoji/checkbox (✅/⏳/❌) untuk status clarity, bukan narasi panjang.
+- **File Links Only When Needed:** Link ke file hanya jika user perlu mengecek/edit. Jangan link semua file.
+- **No Small Talk:** Langsung ke poin. Hindari greeting/closing yang tidak perlu.
+- **Reuse Previous Context:** Jika sudah dijelaskan sebelumnya, reference ke penjelasan lama, jangan repeat.
+- **Batch Multiple Changes:** Jika ada 5 edits serupa (misal: 7 list pages), jelaskan pattern sekali, terapkan 7x tanpa repeat.
+- **Query When Ambiguous:** Tanya 1-2 clarifying question dengan concise format, bukan essay-style prompts.
+
+## 16. Konfirmasi Sebelum Eksekusi (Wajib)
+- **Requirement:** Sebelum membuat file baru, edit file existing, atau update routes/imports, **WAJIB minta konfirmasi ke user dulu**.
+- **Format Konfirmasi:** Proposal singkat dengan list file yang akan affected + jumlah lines.
+  ```
+  **Akan dilakukan:**
+  - Create: src/pages/admin/NewComponent.tsx (60 lines)
+  - Edit: src/App.tsx (15 lines routes)
+  
+  Confirm? [Y/N]
+  ```
+- **Exception:** Jika sudah ada persetujuan eksplisit dari user sebelumnya (misal: "buat semua 14 files"), langsung execute tanpa re-confirm.
+- **User Veto:** Jika user respond "N" atau "tunggu", **STOP semua eksekusi** dan tanya alternative/revision.
 
 ---
 *Aturan ini bersifat mengikat dan harus diperiksa sebelum melakukan perubahan signifikan pada codebase.*

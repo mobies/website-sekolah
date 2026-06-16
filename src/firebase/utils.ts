@@ -1,5 +1,5 @@
 import { ref, set, push, increment, update, serverTimestamp } from "firebase/database";
-import { ref as storageRef, getDownloadURL } from "firebase/storage";
+import { ref as storageRef, getDownloadURL, uploadBytes } from "firebase/storage";
 import { rtdb, storage } from "./config";
 
 /**
@@ -13,7 +13,7 @@ export const getDBRef = (tenantId: string, path: string = '') => {
 
 export const logActivity = async (tenantId: string, data: {
   action: 'TAMBAH' | 'EDIT' | 'HAPUS' | 'RESTORE' | 'PULIHKAN' | 'HAPUS_PERMANEN' | 'UBAH_STATUS',
-  target: 'BERITA' | 'AGENDA' | 'PENGUMUMAN' | 'GALERI' | 'SETTINGS' | 'SLIDESHOW' | 'VIDEO' | 'PROFIL' | 'STAFF',
+  target: 'BERITA' | 'AGENDA' | 'PENGUMUMAN' | 'GALERI' | 'SETTINGS' | 'SLIDESHOW' | 'VIDEO' | 'PROFIL' | 'STAFF' | 'HALAMAN',
   title: string
 }) => {
   try {
@@ -84,4 +84,15 @@ export const getFileURL = async (tenantId: string, path: string) => {
     console.error("Error getting file URL:", error);
     return null;
   }
+};
+
+// Upload helper that forces long cache-control on uploaded files
+export const uploadBytesWithCache = async (fileRef: any, data: Blob | Uint8Array | ArrayBuffer, contentType?: string) => {
+  const metadata: { cacheControl: string; contentType?: string } = {
+    cacheControl: 'public, max-age=31536000, immutable'
+  };
+  if (contentType) metadata.contentType = contentType;
+  else if ((data as any)?.type) metadata.contentType = (data as any).type;
+
+  return await uploadBytes(fileRef, data, metadata);
 };

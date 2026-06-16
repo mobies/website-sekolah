@@ -5,12 +5,13 @@ import { FaSave, FaArrowLeft, FaCloudUploadAlt, FaSyncAlt } from 'react-icons/fa
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import ProgressiveImage from '../../components/ProgressiveImage';
 import { useTenant } from '../../firebase/TenantContext';
-import { getDBRef, getStorageRef, logActivity, updateTimeStats, updateCategoryStats } from '../../firebase/utils';
+import { getDBRef, getStorageRef, logActivity, updateTimeStats, updateCategoryStats, uploadBytesWithCache } from '../../firebase/utils';
+import { useIsOwner } from '../../firebase/useIsOwner';
 import { convertToWebP, convertUrlToWebP } from '../../firebase/imageUtils';
 import type { ImageMetadata } from '../../firebase/imageUtils';
 import { getImageMetadata, getStoragePathFromDownloadURL } from '../../firebase/imageUtils';
 import { onValue, serverTimestamp, ref as dbRef, update } from 'firebase/database';
-import { uploadBytes, getDownloadURL, ref, deleteObject } from 'firebase/storage';
+import { getDownloadURL, ref, deleteObject } from 'firebase/storage';
 import { rtdb as database, storage } from '../../firebase/config';
 import { showAlert, toast, showConfirm } from '../../utils/alerts';
 
@@ -19,6 +20,8 @@ const NewsForm: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = !!id;
+  const { isOwner } = useIsOwner();
+
 
   const [formData, setFormData] = useState({
     title: '',
@@ -105,7 +108,7 @@ const NewsForm: React.FC = () => {
         const webpBlob = await convertToWebP(imageFile, { maxSizeBytes: 100 * 1024 });
         const fileName = `${Date.now()}_news.webp`;
         const fileRef = getStorageRef(tenantId, `news/${fileName}`);
-        await uploadBytes(fileRef, webpBlob);
+        await uploadBytesWithCache(fileRef, webpBlob);
         thumbnailUrl = await getDownloadURL(fileRef);
 
         if (isEdit && originalData?.thumbnail) {
@@ -117,6 +120,31 @@ const NewsForm: React.FC = () => {
               console.error("Gagal menghapus gambar lama:", deleteError);
             }
           }
+        }
+      } else if (isOwner && isEdit && originalData?.thumbnail) {
+        // Owner reupload image with caching even without uploading new image
+        try {
+          const response = await fetch(originalData.thumbnail);
+          const blob = await response.blob();
+          const fileName = `${Date.now()}_news_recache.webp`;
+          const fileRef = getStorageRef(tenantId, `news/${fileName}`);
+          await uploadBytesWithCache(fileRef, blob);
+          const newUrl = await getDownloadURL(fileRef);
+          thumbnailUrl = newUrl;
+
+          // Update thumbnail URL in RTDB
+          await update(dbRef(database), {
+            [`tenants/${tenantId}/news/${id}/thumbnail`]: newUrl,
+            [`tenants/${tenantId}/news_search_index/${id}/img`]: newUrl
+          });
+
+          // Delete old image
+          const oldImageRef = ref(storage, originalData.thumbnail);
+          await deleteObject(oldImageRef);
+
+          console.log(`Owner berhasil mengunggah ulang gambar. URL Lama: ${originalData.thumbnail}, URL Baru: ${newUrl}`);
+        } catch (error) {
+          console.error('Error recaching image for owner:', error);
         }
       }
 
@@ -176,7 +204,7 @@ const NewsForm: React.FC = () => {
     try {
       const fileName = `${Date.now()}_news_reconverted.webp`;
       const fileRef = getStorageRef(tenantId, `news/${fileName}`);
-      await uploadBytes(fileRef, reconvertedBlob);
+      await uploadBytesWithCache(fileRef, reconvertedBlob);
       const newUrl = await getDownloadURL(fileRef);
       
       const updates: any = {};
@@ -189,7 +217,7 @@ const NewsForm: React.FC = () => {
         await deleteObject(oldImageRef);
       } catch (deleteError: any) {
         if (deleteError.code !== 'storage/object-not-found') {
-          console.error("Gagal menghapus gambar lama setelah rekonversi:", deleteError);
+          // console.error("Gagal menghapus gambar lama setelah rekonversi:", deleteError);
         }
       }
 

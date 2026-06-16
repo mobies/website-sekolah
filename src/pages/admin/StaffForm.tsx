@@ -4,9 +4,10 @@ import { useNavigate, useParams, Link } from 'react-router-dom';
 import { FaSave, FaArrowLeft, FaCamera, FaUserTie, FaSyncAlt } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
-import { getDBRef, getStorageRef, logActivity } from '../../firebase/utils';
+import { getDBRef, getStorageRef, logActivity, uploadBytesWithCache } from '../../firebase/utils';
 import { onValue, set, update } from 'firebase/database';
-import { uploadBytes, getDownloadURL, ref, deleteObject } from 'firebase/storage';
+import { getDownloadURL, ref, deleteObject } from 'firebase/storage';
+import { useIsOwner } from '../../firebase/useIsOwner';
 import { convertToWebP, convertUrlToWebP, getImageMetadata, getStoragePathFromDownloadURL } from '../../firebase/imageUtils';
 import type { ImageMetadata } from '../../firebase/imageUtils';
 import { showAlert, toast, showConfirm } from '../../utils/alerts';
@@ -32,6 +33,7 @@ const StaffForm: React.FC = () => {
   const [reconvertedBlob, setReconvertedBlob] = useState<Blob | null>(null);
   const [reconvertedPreviewUrl, setReconvertedPreviewUrl] = useState<string | null>(null);
   const [editorProcessing, setEditorProcessing] = useState(false);
+  const { isOwner } = useIsOwner();
 
   const formatBytes = (bytes: number, decimals = 2) => {
     if (bytes === 0) return '0 Bytes';
@@ -116,9 +118,37 @@ const StaffForm: React.FC = () => {
         const webpBlob = await convertToWebP(photoFile);
         const fileName = `staff_${Date.now()}.webp`;
         const storageRef = getStorageRef(tenantId, `staff_photos/${fileName}`);
-        await uploadBytes(storageRef, webpBlob);
+        await uploadBytesWithCache(storageRef, webpBlob);
         finalPhotoUrl = await getDownloadURL(storageRef);
-        if (id && originalPhoto) { try { await deleteObject(ref(storage, originalPhoto)); } catch (err: any) { if (err.code !== 'storage/object-not-found') console.error("Gagal menghapus foto lama:", err); } }
+        if (id && originalPhoto) { try { await deleteObject(ref(storage, originalPhoto)); } catch (err: any) { if (err.code !== 'storage/object-not-found') { /* console.error(\"Gagal menghapus foto lama:\", err); */ } } }
+      } else if (isOwner && id && originalPhoto) {
+        // Owner reupload image with caching even without uploading new image
+        try {
+          const response = await fetch(originalPhoto);
+          const blob = await response.blob();
+          const fileName = `staff_${Date.now()}_recache.webp`;
+          const storageRef = getStorageRef(tenantId, `staff_photos/${fileName}`);
+          await uploadBytesWithCache(storageRef, blob);
+          const newUrl = await getDownloadURL(storageRef);
+          finalPhotoUrl = newUrl;
+
+          // Update photo URL in RTDB
+          await update(getDBRef(tenantId, `staff/${id}`), { photo: newUrl });
+          await update(getDBRef(tenantId, `staff_search_index/${id}`), { photo: newUrl });
+
+          // Delete old image
+          const oldImageRef = ref(storage, originalPhoto);
+          await deleteObject(oldImageRef);
+
+          setFormData(prev => ({ ...prev, photo: newUrl }));
+          setPreviewUrl(newUrl);
+          const newMetadata = await getImageMetadata(getStoragePathFromDownloadURL(newUrl)!);
+          setPhotoMetadata(newMetadata);
+          setOriginalPhoto(newUrl);
+
+        } catch (error: any) {
+          console.error('Error recaching image for owner:', error);
+        }
       }
       if (!finalPhotoUrl && !id) throw new Error('Foto wajib diunggah');
       const staffData = { ...formData, photo: finalPhotoUrl, updatedAt: Date.now() };
@@ -132,7 +162,7 @@ const StaffForm: React.FC = () => {
         toast.fire({ icon: 'success', title: 'Data berhasil ditambahkan' });
       } else {
         await update(getDBRef(tenantId, `staff/${id}`), staffData);
-        await update(getDBRef(tenantId, `staff_search_index/${id}`), { n: staffData.name.toLowerCase(), name: staffData.name, type: staffData.type, isActive: staffData.isActive, is_editor: staffData.is_editor, email: staffData.email });
+        await update(getDBRef(tenantId, `staff_search_index/${id}`), { n: staffData.name.toLowerCase(), name: staffData.name, type: staffData.type, isActive: staffData.isActive, is_editor: !!staffData.is_editor, email: staffData.email || '' });
         await logActivity(tenantId, { action: 'EDIT', target: 'STAFF', title: staffData.name });
         toast.fire({ icon: 'success', title: 'Data berhasil diperbarui' });
       }
@@ -157,7 +187,7 @@ const StaffForm: React.FC = () => {
     try {
       const fileName = `staff_${Date.now()}_reconverted.webp`;
       const fileRef = getStorageRef(tenantId, `staff_photos/${fileName}`);
-      await uploadBytes(fileRef, reconvertedBlob);
+      await uploadBytesWithCache(fileRef, reconvertedBlob);
       const newUrl = await getDownloadURL(fileRef);
       await update(getDBRef(tenantId, `staff/${id}`), { photo: newUrl });
       if (originalPhoto) { try { await deleteObject(ref(storage, originalPhoto)); } catch (err: any) { if (err.code !== 'storage/object-not-found') console.error("Gagal menghapus foto lama:", err); } }
@@ -180,8 +210,8 @@ const StaffForm: React.FC = () => {
     <DashboardLayout>
       <Container fluid className="p-0 pb-5">
         <div className="d-flex align-items-center mb-4"><Button as={Link as any} to="/dashboard/staff" variant="light" className="btn-icon me-3 shadow-sm"><FaArrowLeft /></Button><div><h4 className="fw-bold text-dark mb-0">{id ? 'Edit' : 'Tambah'} Guru & Staf</h4><p className="text-muted small mb-0">Lengkapi informasi biodata secara akurat.</p></div></div>
-        <Row className="justify-content-center">
-           <Col lg={8}>
+        <Row>
+           <Col xs={12}>
               <Form onSubmit={handleSubmit}>
                  <Card className="border-0 shadow-sm rounded-4 overflow-hidden mb-4">
                     <Card.Body className="p-4">
@@ -197,7 +227,7 @@ const StaffForm: React.FC = () => {
                              <Form.Group className="mb-3"><Form.Label className="fw-bold small text-muted">NAMA LENGKAP & GELAR</Form.Label><Form.Control required placeholder="Contoh: Drs. H. Ahmad, M.Pd" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="fw-bold"/></Form.Group>
                              <Form.Group className="mb-3"><Form.Label className="fw-bold small text-muted">EMAIL (Opsional)</Form.Label><Form.Control type="email" placeholder="Untuk matching dengan akun editor" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} /></Form.Group>
                              <Row><Col md={6}><Form.Group className="mb-3"><Form.Label className="fw-bold small text-muted">JENIS KEPEGAWAIAN</Form.Label><Form.Select value={formData.type} onChange={e => setFormData({...formData, type: e.target.value as any, subject: e.target.value === 'staf' ? '' : formData.subject})}><option value="guru">Guru</option><option value="staf">Staf Tata Usaha</option><option value="pimpinan">Pimpinan</option></Form.Select></Form.Group></Col><Col md={6}><Form.Group className="mb-3"><Form.Label className="fw-bold small text-muted">STATUS AKTIF</Form.Label><div className="d-flex align-items-center h-100 pt-1"><Form.Check type="switch" id="staff-status" label={formData.isActive ? <Badge bg="success-subtle" className="text-success">Aktif</Badge> : <Badge bg="secondary-subtle" className="text-secondary">Nonaktif</Badge>} checked={formData.isActive} onChange={e => setFormData({...formData, isActive: e.target.checked})}/></div></Form.Group></Col></Row>
-                             <Row><Col md={6}><Form.Group className="mb-4"><Form.Label className="fw-bold small text-muted">ISI EDITOR</Form.Label><div className="d-flex align-items-center h-100 pt-1"><Form.Check type="switch" id="staff-editor" label={formData.is_editor ? <Badge bg="info-subtle" className="text-info">Editor</Badge> : <Badge bg="secondary-subtle" className="text-secondary">Bukan Editor</Badge>} checked={formData.is_editor} disabled={editorProcessing} onChange={e => void handleEditorToggle(e.target.checked)}/></div><Form.Text className="text-muted extra-small d-block mt-2">Jika aktif, guru ini bisa inline edit/add berita & pengumuman di halaman publik.</Form.Text></Form.Group></Col></Row>
+                             <Row><Col md={6}><Form.Group className="mb-4"><Form.Label className="fw-bold small text-muted">EDITOR BERITA</Form.Label><div className="d-flex align-items-center h-100 pt-1"><Form.Check type="switch" id="staff-editor" label={formData.is_editor ? <Badge bg="info-subtle" className="text-info">Editor</Badge> : <Badge bg="secondary-subtle" className="text-secondary">Bukan Editor</Badge>} checked={formData.is_editor} disabled={editorProcessing} onChange={e => void handleEditorToggle(e.target.checked)}/></div><Form.Text className="text-muted extra-small d-block mt-2">Jika aktif, guru ini bisa inline edit/add berita & pengumuman di halaman publik.</Form.Text></Form.Group></Col></Row>
                              {(formData.type === 'guru' || formData.type === 'pimpinan') && (<Form.Group className="mb-4"><Form.Label className="fw-bold small text-muted">MATA PELAJARAN / JABATAN</Form.Label><Form.Control placeholder="Contoh: Matematika / Waka Kurikulum" value={formData.subject} onChange={e => setFormData({...formData, subject: e.target.value})}/></Form.Group>)}
                              <div className="mt-4 pt-3 border-top d-flex gap-2"><Button type="submit" variant="success" className="px-4 fw-bold rounded-pill shadow-sm" disabled={saving}>{saving ? <Spinner size="sm" className="me-2" /> : <FaSave className="me-2" />} {id ? 'Update Data' : 'Simpan Data'}</Button><Button as={Link as any} to="/dashboard/staff" variant="light" className="px-4 fw-bold rounded-pill border">Batal</Button></div>
                           </Col>
@@ -215,3 +245,4 @@ const StaffForm: React.FC = () => {
 };
 
 export default StaffForm;
+

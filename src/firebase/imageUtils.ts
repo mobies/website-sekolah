@@ -5,6 +5,7 @@ export interface ImageMetadata {
   sizeBytes: number;
   fileExtension: string;
   downloadURL: string;
+  cacheControl?: string | null;
 }
 
 export const getImageMetadata = async (
@@ -31,7 +32,7 @@ export const getImageMetadata = async (
       }
     }
 
-    return { sizeBytes, fileExtension, downloadURL };
+    return { sizeBytes, fileExtension, downloadURL, cacheControl: (metadata as any).cacheControl || null };
   } catch (error) {
     console.error("Error fetching image metadata for path:", storagePath, error);
     return null;
@@ -122,13 +123,15 @@ export const convertToWebP = (
 
 /**
  * Converts an image for the hero slideshow.
- * - Converts to WebP at a fixed 70% quality.
- * - Validates if the size is under 100KB.
+ * - Converts to WebP at a fixed 90% quality.
+ * - Iteratively downsizes dimensions until the file is under 150KB.
  * - Throws an error if the file is too large.
  */
 export const convertHeroImage = (file: File): Promise<Blob> => {
-  const QUALITY = 0.7;
-  const MAX_SIZE_BYTES = 100 * 1024; // 100KB
+  const QUALITY = 0.9;
+  const MAX_SIZE_BYTES = 150 * 1024; // 150KB
+  const MIN_WIDTH = 400;
+  const MIN_HEIGHT = 225;
 
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -136,27 +139,46 @@ export const convertHeroImage = (file: File): Promise<Blob> => {
     reader.onload = (event) => {
       const img = new Image();
       img.src = event.target?.result as string;
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas');
-        canvas.width = img.width;
-        canvas.height = img.height;
         const ctx = canvas.getContext('2d');
         if (!ctx) return reject(new Error('Failed to get canvas context'));
-        
-        ctx.drawImage(img, 0, 0, img.width, img.height);
-        
-        canvas.toBlob((blob) => {
-          if (blob) {
-            if (blob.size > MAX_SIZE_BYTES) {
-              const actualSize = (blob.size / 1024).toFixed(1);
-              reject(new Error(`Ukuran file setelah konversi (${actualSize}KB) melebihi batas 100KB.`));
-            } else {
-              resolve(blob);
-            }
-          } else {
+
+        let width = img.width;
+        let height = img.height;
+        let blob: Blob | null = null;
+
+        for (let attempt = 0; attempt < 12; attempt++) {
+          canvas.width = Math.round(width);
+          canvas.height = Math.round(height);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          blob = await new Promise<Blob | null>((res) => {
+            canvas.toBlob((b) => res(b), 'image/webp', QUALITY);
+          });
+
+          if (!blob) {
             reject(new Error('Gagal melakukan konversi ke WebP.'));
+            return;
           }
-        }, 'image/webp', QUALITY);
+
+          if (blob.size <= MAX_SIZE_BYTES) {
+            resolve(blob);
+            return;
+          }
+
+          const nextWidth = Math.round(width * 0.9);
+          const nextHeight = Math.round(height * 0.9);
+          if (nextWidth < MIN_WIDTH || nextHeight < MIN_HEIGHT) {
+            break;
+          }
+          width = nextWidth;
+          height = nextHeight;
+        }
+
+        const actualSize = blob ? (blob.size / 1024).toFixed(1) : 'unknown';
+        reject(new Error(`Ukuran file setelah konversi (${actualSize}KB) melebihi batas 150KB pada kualitas 90%.`));
       };
       img.onerror = (error) => reject(error);
     };

@@ -5,13 +5,14 @@ import { FaArrowLeft, FaPlus, FaTrash, FaEye, FaSyncAlt } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import ProgressiveImage from '../../components/ProgressiveImage';
 import { useTenant } from '../../firebase/TenantContext';
-import { getDBRef, getStorageRef, logActivity, updateCounter } from '../../firebase/utils';
+import { getDBRef, getStorageRef, logActivity, updateCounter, uploadBytesWithCache } from '../../firebase/utils';
 import { onValue, push, set, update, query, orderByChild, limitToLast, endAt, get, ref as dbRef } from 'firebase/database';
 import { rtdb as database, storage } from '../../firebase/config';
-import { uploadBytes, getDownloadURL, ref, deleteObject } from 'firebase/storage';
+import { getDownloadURL, ref, deleteObject } from 'firebase/storage';
 import { showAlert, toast, showConfirm } from '../../utils/alerts';
 import { convertToWebP, convertUrlToWebP, getImageMetadata, getStoragePathFromDownloadURL } from '../../firebase/imageUtils';
 import type { ImageMetadata } from '../../firebase/imageUtils';
+import { useIsOwner } from '../../firebase/useIsOwner';
 
 interface Photo {
   id: string;
@@ -49,6 +50,7 @@ const PhotoManager: React.FC = () => {
   const [reconvertedBlob, setReconvertedBlob] = useState<Blob | null>(null);
   const [reconvertedPreviewUrl, setReconvertedPreviewUrl] = useState<string | null>(null);
   const [reconvertTarget, setReconvertTarget] = useState<Photo | null>(null);
+  const { isOwner } = useIsOwner();
 
   const formatBytes = (bytes: number, decimals = 2) => {
     if (bytes === 0) return '0 Bytes';
@@ -120,7 +122,7 @@ const PhotoManager: React.FC = () => {
       const webpBlob = await convertToWebP(file);
       const fileName = `${Date.now()}_gallery.webp`;
       const fileRef = getStorageRef(tenantId, `gallery/${albumId}/${fileName}`);
-      await uploadBytes(fileRef, webpBlob);
+      await uploadBytesWithCache(fileRef, webpBlob);
       const url = await getDownloadURL(fileRef);
       const photoRef = push(dbRef(database, `tenants/${tenantId}/gallery_photos`));
       const newPhoto = { albumId, url, createdAt: Date.now(), deleted: false };
@@ -174,10 +176,10 @@ const PhotoManager: React.FC = () => {
       const { id, url: oldUrl, albumId } = reconvertTarget;
       const fileName = `${Date.now()}_gallery_reconverted.webp`;
       const fileRef = getStorageRef(tenantId, `gallery/${albumId}/${fileName}`);
-      await uploadBytes(fileRef, reconvertedBlob);
+      await uploadBytesWithCache(fileRef, reconvertedBlob);
       const newUrl = await getDownloadURL(fileRef);
       await update(dbRef(database, `tenants/${tenantId}/gallery_photos/${id}`), { url: newUrl });
-      if (oldUrl) { try { await deleteObject(ref(storage, oldUrl)); } catch (err: any) { if (err.code !== 'storage/object-not-found') console.error("Gagal hapus foto lama:", err); } }
+      if (oldUrl) { try { await deleteObject(ref(storage, oldUrl)); } catch (err: any) { if (err.code !== 'storage/object-not-found') { /* console.error(\"Gagal hapus foto lama:\", err); */ } } }
       const newMetadata = await getImageMetadata(getStoragePathFromDownloadURL(newUrl)!);
       setPhotos(prev => prev.map(p => p.id === id ? { ...p, url: newUrl, metadata: newMetadata } : p));
       setShowPreviewModal(false); if(reconvertedPreviewUrl) URL.revokeObjectURL(reconvertedPreviewUrl); setReconvertedBlob(null); setReconvertedPreviewUrl(null); setReconvertTarget(null);
@@ -204,7 +206,8 @@ const PhotoManager: React.FC = () => {
                   <div className="position-absolute top-0 start-0 p-2 z-index-2"><Button onClick={() => openPreview(photo.url)} variant="light" size="sm" className="rounded-circle shadow-sm btn-icon" style={{ width: '30px', height: '30px' }}><FaEye size={12} /></Button></div>
                   <ProgressiveImage src={photo.url} className="img-fluid" style={{ height: '220px', width: '100%' }} alt="" />
                   <div className="position-absolute top-0 end-0 p-2 z-index-2"><Button onClick={(e) => { e.stopPropagation(); handleDelete(photo); }} variant="danger" size="sm" className="rounded-circle shadow-sm btn-icon" style={{ width: '30px', height: '30px' }}><FaTrash size={12} /></Button></div>
-                  {photo.metadata && (<div className="position-absolute bottom-0 start-0 w-100 p-2 bg-dark bg-opacity-75 text-white d-flex justify-content-between align-items-center"><span className="extra-small">{formatBytes(photo.metadata.sizeBytes)} .{photo.metadata.fileExtension}</span>{needsReconversion(photo.metadata) && (<Button variant="link" className="p-0 text-warning" onClick={(e) => { e.stopPropagation(); handleReconvertClick(photo); }} disabled={isReconverting}><FaSyncAlt size={14} /></Button>)}</div>)}
+                  {photo.metadata && (<div className="position-absolute bottom-0 start-0 w-100 p-2 bg-dark bg-opacity-75 text-white d-flex justify-content-between align-items-center"><span className="extra-small">{formatBytes(photo.metadata.sizeBytes)} .{photo.metadata.fileExtension}</span>{(isOwner || needsReconversion(photo.metadata)) && (<Button variant="link" className="p-0 text-warning" onClick={(e) => { e.stopPropagation(); handleReconvertClick(photo); }} disabled={isReconverting}><FaSyncAlt size={14} /></Button>)}</div>)}
+
                 </Card>
               </Col>
             ))

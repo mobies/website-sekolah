@@ -4,7 +4,8 @@ import { Link } from 'react-router-dom';
 import { useTenant } from '../firebase/TenantContext';
 import { getDBRef } from '../firebase/utils';
 import { onValue } from 'firebase/database';
-import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaFacebook, FaTwitter, FaInstagram, FaYoutube } from 'react-icons/fa';
+import { FaPhone, FaEnvelope, FaMapMarkerAlt, FaFacebook, FaTwitter, FaInstagram, FaYoutube, FaLinkedin, FaTiktok, FaTelegram, FaWhatsapp, FaPinterest, FaGithub, FaLink, FaDiscord } from 'react-icons/fa';
+import { FaXTwitter } from 'react-icons/fa6';
 
 interface ContactData {
   phone: string;
@@ -12,17 +13,17 @@ interface ContactData {
   address: string;
 }
 
+interface SocialMediaItem {
+  url: string;
+  active: boolean;
+}
+
 interface SchoolSettings {
   schoolName: string;
   tagline: string;
   description?: string;
   contact?: ContactData;
-  socialMedia?: {
-    facebook?: string;
-    twitter?: string;
-    instagram?: string;
-    youtube?: string;
-  };
+  socialMedia?: Record<string, SocialMediaItem>;
 }
 
 interface EService {
@@ -92,39 +93,13 @@ const Footer: React.FC = () => {
         <Row className="gy-4">
           {/* School Profile */}
           <Col lg={4} md={6}>
-            <h5 className="text-success fw-bold mb-4">{schoolInfo.schoolName}</h5>
-            <p className="small text-white mb-4" style={{ lineHeight: '1.8' }}>
-              {schoolInfo.description || `${schoolInfo.tagline}. Lembaga pendidikan formal yang berkomitmen mencetak generasi unggul dalam prestasi dan berakhlakul karimah.`}
+            <h5 className="text-success fw-bold mb-2">{schoolInfo.schoolName}</h5>
+            <p className="small text-success mb-3" style={{ lineHeight: '1.6' }}>
+              {schoolInfo.tagline}
             </p>
-            <div className="d-flex gap-3">
-              {schoolInfo.socialMedia?.facebook && (
-                <a href={schoolInfo.socialMedia.facebook} target="_blank" rel="noopener noreferrer" className="social-icon">
-                  <FaFacebook size={20} />
-                </a>
-              )}
-              {schoolInfo.socialMedia?.instagram && (
-                <a href={schoolInfo.socialMedia.instagram} target="_blank" rel="noopener noreferrer" className="social-icon">
-                  <FaInstagram size={20} />
-                </a>
-              )}
-              {schoolInfo.socialMedia?.twitter && (
-                <a href={schoolInfo.socialMedia.twitter} target="_blank" rel="noopener noreferrer" className="social-icon">
-                  <FaTwitter size={20} />
-                </a>
-              )}
-              {schoolInfo.socialMedia?.youtube && (
-                <a href={schoolInfo.socialMedia.youtube} target="_blank" rel="noopener noreferrer" className="social-icon">
-                  <FaYoutube size={20} />
-                </a>
-              )}
-              {!schoolInfo.socialMedia && (
-                <>
-                  <a href="#" className="social-icon"><FaFacebook size={20} /></a>
-                  <a href="#" className="social-icon"><FaInstagram size={20} /></a>
-                  <a href="#" className="social-icon"><FaYoutube size={20} /></a>
-                </>
-              )}
-            </div>
+            <p className="small text-white mb-0" style={{ lineHeight: '1.8' }}>
+              {schoolInfo.description || 'Lembaga pendidikan formal yang berkomitmen mencetak generasi unggul dalam prestasi dan berakhlakul karimah.'}
+            </p>
           </Col>
 
           {/* Quick Links */}
@@ -168,9 +143,9 @@ const Footer: React.FC = () => {
           </Col>
 
           {/* Contact */}
-          <Col lg={3} md={6}>
+          <Col lg={3} md={6} className="d-flex flex-column">
             <h6 className="fw-bold mb-4 text-uppercase tracking-wider">Kontak Kami</h6>
-            <ul className="list-unstyled footer-contact">
+            <ul className="list-unstyled footer-contact flex-grow-1">
               <li className="d-flex mb-3">
                 <FaMapMarkerAlt className="text-success mt-1 me-3 flex-shrink-0" />
                 <span className="small text-white">{schoolInfo.contact?.address || 'Alamat belum diatur'}</span>
@@ -184,6 +159,31 @@ const Footer: React.FC = () => {
                 <span className="small text-white text-break">{schoolInfo.contact?.email || 'Email belum diatur'}</span>
               </li>
             </ul>
+
+            <div className="mt-auto d-flex flex-wrap justify-content-md-end justify-content-start gap-2" style={{ maxWidth: '240px', alignSelf: 'flex-md-end' }}>
+              {schoolInfo.socialMedia && Object.entries(schoolInfo.socialMedia).map(([platform, data]) => {
+                if (!data.active || !data.url) return null;
+                let Icon = FaLink;
+                if (platform === 'facebook') Icon = FaFacebook;
+                if (platform === 'instagram') Icon = FaInstagram;
+                if (platform === 'youtube') Icon = FaYoutube;
+                if (platform === 'twitter') Icon = FaTwitter;
+                if (platform === 'x') Icon = FaXTwitter;
+                if (platform === 'linkedin') Icon = FaLinkedin;
+                if (platform === 'tiktok') Icon = FaTiktok;
+                if (platform === 'telegram') Icon = FaTelegram;
+                if (platform === 'whatsapp') Icon = FaWhatsapp;
+                if (platform === 'pinterest') Icon = FaPinterest;
+                if (platform === 'github') Icon = FaGithub;
+                if (platform === 'discord') Icon = FaDiscord;
+
+                return (
+                  <a key={platform} href={data.url} target="_blank" rel="noopener noreferrer" className="social-icon" title={platform} style={{ width: '32px', height: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: '50%', color: '#fff', transition: '0.3s' }}>
+                    <Icon size={16} />
+                  </a>
+                );
+              })}
+            </div>
           </Col>
         </Row>
 
@@ -197,7 +197,7 @@ const Footer: React.FC = () => {
           </Col>
           <Col md={6} className="text-center text-md-end mt-3 mt-md-0">
             <p className="small text-white mb-0">
-              Developed with <span className="text-danger">❤</span> by <a href="#" className="text-decoration-none text-warning fw-bold hover-warning">dibuat untuk pendidikan indonesia</a>
+              Developed with <span className="text-danger">❤</span> by <a href="#" className="text-decoration-none fw-bold" style={{ color: '#56bfff' }}>Mobies Creative</a>
             </p>
           </Col>
         </Row>

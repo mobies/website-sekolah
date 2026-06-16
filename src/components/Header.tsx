@@ -8,7 +8,7 @@ import { auth, googleProvider, functions } from '../firebase/config';
 import { onAuthStateChanged, type User, signInWithPopup, signOut } from 'firebase/auth';
 import { httpsCallable } from 'firebase/functions';
 import ProgressiveImage from './ProgressiveImage';
-import { FaUserCircle, FaSignInAlt, FaSignOutAlt } from 'react-icons/fa';
+import { FaUserCircle, FaSignInAlt, FaSignOutAlt, FaCalendarAlt, FaExternalLinkAlt, FaBullhorn, FaNewspaper, FaVideo, FaImages, FaBookOpen } from 'react-icons/fa';
 import { toast } from '../utils/alerts';
 
 interface EService {
@@ -26,6 +26,64 @@ interface ProfileContent {
   order: number;
 }
 
+interface MenuLabels {
+  home: string;
+  content: string;
+  profile: string;
+  eServices: string;
+  contact: string;
+  news: string;
+  announcements: string;
+  agenda: string;
+  video: string;
+  gallery: string;
+}
+
+interface LinkedMenuItem {
+  id: string;
+  title: string;
+  url: string;
+  active: boolean;
+  order: number;
+  parentId: string | null;
+  rootAfterId?: string | null;
+  targetType?: 'url' | 'page';
+  pageId?: string | null;
+}
+
+interface SitePage {
+  id: string;
+  title: string;
+  slug: string;
+  isActive: boolean;
+  order: number;
+}
+
+interface MenuConfig {
+  labels: MenuLabels;
+  linkedMenus: LinkedMenuItem[];
+  fixedRootOrder: string[];
+}
+
+const DEFAULT_MENU_LABELS: MenuLabels = {
+  home: 'Beranda',
+  content: 'Konten',
+  profile: 'Profile',
+  eServices: 'E-Layanan',
+  contact: 'Kontak',
+  news: 'Berita',
+  announcements: 'Pengumuman',
+  agenda: 'Agenda',
+  video: 'Video',
+  gallery: 'Galeri'
+};
+
+const DEFAULT_MENU_CONFIG: MenuConfig = {
+  labels: DEFAULT_MENU_LABELS,
+  linkedMenus: [],
+  fixedRootOrder: ['profile', 'eServices', 'content', 'contact']
+};
+
 const Header: React.FC = () => {
   const { tenantId } = useTenant();
   const navigate = useNavigate();
@@ -35,8 +93,10 @@ const Header: React.FC = () => {
     tagline: 'Unggul, Religius, Berbudaya',
     logo: '/logo.png'
   });
+  const [menuConfig, setMenuConfig] = useState<MenuConfig>(DEFAULT_MENU_CONFIG);
   const [eServices, setEServices] = useState<EService[]>([]);
   const [profiles, setProfiles] = useState<ProfileContent[]>([]);
+  const [sitePages, setSitePages] = useState<SitePage[]>([]);
   
   // Auth State
   const [user, setUser] = useState<User | null>(null);
@@ -124,6 +184,28 @@ const Header: React.FC = () => {
           tagline: data.tagline || 'Unggul, Religius, Berbudaya',
           logo: data.logo || '/logo.png'
         });
+        setMenuConfig({
+          labels: {
+            ...DEFAULT_MENU_LABELS,
+            ...(data.menuConfig?.labels || {})
+          },
+              linkedMenus: Array.isArray(data.menuConfig?.linkedMenus)
+            ? data.menuConfig.linkedMenus.map((item: any, index: number) => ({
+                id: item.id || `menu-${index}`,
+                title: item.title || '',
+                url: item.url || '',
+                active: item.active !== false,
+                order: typeof item.order === 'number' ? item.order : index,
+                parentId: item.parentId ?? null,
+                rootAfterId: item.rootAfterId ?? null
+                ,targetType: item.targetType || 'url',
+                pageId: item.pageId ?? null
+              }))
+            : [],
+          fixedRootOrder: Array.isArray(data.menuConfig?.fixedRootOrder)
+            ? data.menuConfig.fixedRootOrder.filter((id: string) => ['profile', 'eServices', 'content', 'contact'].includes(id))
+            : DEFAULT_MENU_CONFIG.fixedRootOrder
+        });
       }
     });
 
@@ -154,12 +236,81 @@ const Header: React.FC = () => {
       }
     });
 
+    const pagesRef = getDBRef(tenantId, 'pages');
+    const unsubPages = onValue(pagesRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list = Object.keys(data)
+          .map(key => ({ id: key, ...data[key] }))
+          .filter((p: any) => p.isActive)
+          .sort((a, b) => a.order - b.order);
+        setSitePages(list);
+      } else {
+        setSitePages([]);
+      }
+    });
+
     return () => {
       unsubSettings();
       unsubServices();
       unsubProfiles();
+      unsubPages();
     };
   }, [tenantId]);
+
+  const getRootLinkedMenus = () => menuConfig.linkedMenus
+    .filter(item => item.active && !item.parentId && item.title.trim().toLowerCase() !== (menuConfig.labels.eServices || DEFAULT_MENU_LABELS.eServices).trim().toLowerCase())
+    .sort((a, b) => a.order - b.order);
+
+  const getLinkedChildren = (parentId: string) => menuConfig.linkedMenus
+    .filter(item => item.active && item.parentId === parentId)
+    .sort((a, b) => a.order - b.order);
+
+  const getPageUrlById = (pageId?: string | null) => {
+    if (!pageId) return '';
+    const page = sitePages.find(item => item.id === pageId);
+    return page ? `/page/${page.slug}` : '';
+  };
+
+  const getOrderedRootMenus = () => {
+    const fixedRoots = [
+      { id: 'home', title: menuConfig.labels.home || DEFAULT_MENU_LABELS.home },
+      { id: 'profile', title: menuConfig.labels.profile || DEFAULT_MENU_LABELS.profile },
+      { id: 'eServices', title: menuConfig.labels.eServices || DEFAULT_MENU_LABELS.eServices },
+      { id: 'content', title: menuConfig.labels.content || DEFAULT_MENU_LABELS.content },
+      { id: 'contact', title: menuConfig.labels.contact || DEFAULT_MENU_LABELS.contact }
+    ];
+
+    const orderedFixedRoots = [
+      fixedRoots[0],
+      ...menuConfig.fixedRootOrder.map(id => fixedRoots.find(root => root.id === id)).filter(Boolean) as Array<{ id: string; title: string }>
+    ];
+
+    const rootLinkedItems = getRootLinkedMenus();
+    const grouped = new Map<string, LinkedMenuItem[]>();
+    rootLinkedItems.forEach(item => {
+      const anchorId = item.rootAfterId || 'content';
+      const list = grouped.get(anchorId) || [];
+      list.push(item);
+      grouped.set(anchorId, list);
+    });
+
+    const ordered: Array<{ kind: 'fixed' | 'linked'; id: string; title: string; item?: LinkedMenuItem }> = [];
+    const appendAfter = (anchorId: string) => {
+      const children = (grouped.get(anchorId) || []).slice().sort((a, b) => a.order - b.order);
+      children.forEach(child => {
+        ordered.push({ kind: 'linked', id: child.id, title: child.title, item: child });
+        appendAfter(child.id);
+      });
+    };
+
+    orderedFixedRoots.forEach(root => {
+      ordered.push({ kind: 'fixed', id: root.id, title: root.title });
+      appendAfter(root.id);
+    });
+
+    return ordered;
+  };
 
   return (
     <Navbar bg="white" expand="lg" sticky="top" className="shadow-sm py-2 px-0">
@@ -173,44 +324,104 @@ const Header: React.FC = () => {
           />
           <div className="d-none d-sm-block">
             <span className="fw-bold text-success d-block lh-1 text-uppercase small">{settings.schoolName}</span>
-            <small className="text-muted" style={{ fontSize: '0.65rem' }}>{settings.tagline}</small>
+            <small className="text-muted d-block mb-0" style={{ fontSize: '0.65rem', lineHeight: 1.1, marginTop: '0.1rem' }}>{settings.tagline}</small>
           </div>
         </Navbar.Brand>
         
         <Navbar.Toggle aria-controls="basic-navbar-nav" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="ms-auto fw-medium align-items-lg-center">
-            <Nav.Link as={Link} to="/">Beranda</Nav.Link>
-            
-            {/* Dynamic Profil Menu */}
-            {profiles.length > 0 && (
-              <NavDropdown title="Profil" id="profil-nav-dropdown">
-                {profiles.map(p => (
-                  <NavDropdown.Item key={p.id} as={Link} to={`/profil/${p.slug}`}>{p.title}</NavDropdown.Item>
-                ))}
-              </NavDropdown>
-            )}
-            
-            {/* Dynamic E-Layanan Menu */}
-            {eServices.length > 0 && (
-              <NavDropdown title="E-Layanan" id="elayanan-nav-dropdown">
-                {eServices.map((svc) => (
-                  <NavDropdown.Item key={svc.id} href={svc.url} target="_blank" rel="noopener noreferrer">
-                    <span className="me-2">{svc.icon}</span> {svc.title}
-                  </NavDropdown.Item>
-                ))}
-              </NavDropdown>
-            )}
+            {getOrderedRootMenus().map((entry) => {
+              if (entry.kind === 'fixed') {
+                if (entry.id === 'home') {
+                  return <Nav.Link key={entry.id} as={Link} to="/">{entry.title}</Nav.Link>;
+                }
+                if (entry.id === 'profile') {
+                  return profiles.length > 0 ? (
+                    <NavDropdown key={entry.id} title={entry.title} id="profile-nav-dropdown">
+                      {profiles.map(p => (
+                        <NavDropdown.Item key={p.id} as={Link} to={`/profil/${p.slug}`}>
+                          <FaBookOpen className="me-2 submenu-icon" />
+                          {p.title}
+                        </NavDropdown.Item>
+                      ))}
+                    </NavDropdown>
+                  ) : null;
+                }
+                if (entry.id === 'eServices') {
+                  return eServices.length > 0 ? (
+                    <NavDropdown key={entry.id} title={entry.title} id="elayanan-nav-dropdown">
+                      {eServices.map((svc) => (
+                        <NavDropdown.Item key={svc.id} href={svc.url} target="_blank" rel="noopener noreferrer">
+                          <FaExternalLinkAlt className="me-2 submenu-icon" />
+                          <span className="me-2">{svc.icon}</span>
+                          {svc.title}
+                        </NavDropdown.Item>
+                      ))}
+                    </NavDropdown>
+                  ) : null;
+                }
+                if (entry.id === 'content') {
+                  return (
+                    <NavDropdown key={entry.id} title={entry.title} id="konten-nav-dropdown">
+                      <NavDropdown.Item as={Link} to="/berita"><FaNewspaper className="me-2 submenu-icon" />{menuConfig.labels.news || DEFAULT_MENU_LABELS.news}</NavDropdown.Item>
+                      <NavDropdown.Item as={Link} to="/pengumuman"><FaBullhorn className="me-2 submenu-icon" />{menuConfig.labels.announcements || DEFAULT_MENU_LABELS.announcements}</NavDropdown.Item>
+                      <NavDropdown.Item as={Link} to="/agenda"><FaCalendarAlt className="me-2 submenu-icon" />{menuConfig.labels.agenda || DEFAULT_MENU_LABELS.agenda}</NavDropdown.Item>
+                      <NavDropdown.Item as={Link} to="/video"><FaVideo className="me-2 submenu-icon" />{menuConfig.labels.video || DEFAULT_MENU_LABELS.video}</NavDropdown.Item>
+                      <NavDropdown.Item as={Link} to="/galeri"><FaImages className="me-2 submenu-icon" />{menuConfig.labels.gallery || DEFAULT_MENU_LABELS.gallery}</NavDropdown.Item>
+                    </NavDropdown>
+                  );
+                }
+                if (entry.id === 'contact') {
+                  return <Nav.Link key={entry.id} as={Link} to="/kontak">{entry.title}</Nav.Link>;
+                }
+                return null;
+              }
 
-            <NavDropdown title="Konten" id="konten-nav-dropdown">
-              <NavDropdown.Item as={Link} to="/berita">Berita</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/pengumuman">Pengumuman</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/video">Video</NavDropdown.Item>
-              <NavDropdown.Item as={Link} to="/galeri">Galeri</NavDropdown.Item>
-            </NavDropdown>
+              const item = entry.item!;
+              const children = getLinkedChildren(item.id);
+              const resolvedUrl = item.targetType === 'page' ? getPageUrlById(item.pageId) : item.url;
+              const isInternal = resolvedUrl.startsWith('/');
+              if (children.length > 0) {
+                return (
+                  <NavDropdown key={item.id} title={item.title} id={`linked-menu-${item.id}`}>
+                    {resolvedUrl && (
+                      <NavDropdown.Item as={isInternal ? Link : 'a'} {...(isInternal ? { to: resolvedUrl } : { href: resolvedUrl, target: '_blank', rel: 'noopener noreferrer' })}>
+                        <FaExternalLinkAlt className="me-2 submenu-icon" />
+                        Buka {item.title}
+                      </NavDropdown.Item>
+                    )}
+                    {children.map((child) => {
+                      const childUrl = child.targetType === 'page' ? getPageUrlById(child.pageId) : child.url;
+                      const childInternal = childUrl.startsWith('/');
+                      return (
+                        <NavDropdown.Item
+                          key={child.id}
+                          as={childInternal ? Link : 'a'}
+                          {...(childInternal
+                            ? { to: childUrl || '#' }
+                            : { href: childUrl || '#', target: '_blank', rel: 'noopener noreferrer' })}
+                        >
+                          <FaBookOpen className="me-2 submenu-icon" />
+                          {child.title}
+                        </NavDropdown.Item>
+                      );
+                    })}
+                  </NavDropdown>
+                );
+              }
 
-            <Nav.Link as={Link} to="/agenda">Agenda</Nav.Link>
-            <Nav.Link as={Link} to="/kontak">Kontak</Nav.Link>
+              const isRootInternal = resolvedUrl.startsWith('/');
+              return (
+                <Nav.Link
+                  key={item.id}
+                  as={isRootInternal ? Link : 'a'}
+                  {...(isRootInternal ? { to: resolvedUrl || '#' } : { href: resolvedUrl || '#', target: '_blank', rel: 'noopener noreferrer' })}
+                >
+                  {item.title}
+                </Nav.Link>
+              );
+            })}
             
             {/* Dashboard menu for Admin only */}
             {user && isAdmin && (
@@ -263,6 +474,11 @@ const Header: React.FC = () => {
           display: none;
         }
         .extra-small { font-size: 0.7rem; }
+        .submenu-icon {
+          width: 14px;
+          text-align: center;
+          opacity: 0.85;
+        }
       `}</style>
     </Navbar>
   );

@@ -4,24 +4,31 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { FaSave, FaArrowLeft } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
-import { getDBRef, logActivity, updateTimeStats } from '../../firebase/utils';
+import { useIsOwner } from '../../firebase/useIsOwner';
+import { getDBRef, logActivity, updateTimeStats, getStorageRef, uploadBytesWithCache, updateCounter } from '../../firebase/utils';
 import { onValue, serverTimestamp, ref as dbRef, update } from 'firebase/database';
 import { showAlert, toast } from '../../utils/alerts';
 import { rtdb as database } from '../../firebase/config';
+import { getDownloadURL } from 'firebase/storage';
 
 const AnnouncementForm: React.FC = () => {
   const { tenantId } = useTenant();
   const { id } = useParams();
   const navigate = useNavigate();
   const isEdit = !!id;
+  const { isOwner, loading: ownerLoading } = useIsOwner();
 
   const [formData, setFormData] = useState({
     title: '',
     content: '',
     status: 'published' as 'published' | 'draft',
     date: new Date().toISOString().split('T')[0],
+    attachmentUrl: null as string | null,
+    attachmentType: null as string | null,
+    hasAttachment: false,
   });
   
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(isEdit);
   const [originalDate, setOriginalDate] = useState<string | null>(null);
@@ -33,6 +40,9 @@ const AnnouncementForm: React.FC = () => {
           const data = snap.val();
           setFormData(data);
           setOriginalDate(data.date);
+          if (data.attachmentUrl) {
+            setFormData(prev => ({ ...prev, attachmentUrl: data.attachmentUrl, attachmentType: data.attachmentType, hasAttachment: true }));
+          }
         }
         setFetching(false);
       }, { onlyOnce: true });
@@ -46,8 +56,35 @@ const AnnouncementForm: React.FC = () => {
     try {
       const updates: any = {};
       
+      let newAttachmentUrl = formData.attachmentUrl;
+      let newAttachmentType = formData.attachmentType;
+      let newHasAttachment = formData.hasAttachment;
+
+      // 1. Handle attachment upload
+      if (attachmentFile) {
+        const attachmentPath = `announcements/${id || Date.now()}/${attachmentFile.name}`;
+        const attachmentRef = getStorageRef(tenantId, attachmentPath);
+        const uploadResult = await uploadBytesWithCache(attachmentRef, attachmentFile);
+        newAttachmentUrl = await getDownloadURL(uploadResult.ref);
+        newAttachmentType = attachmentFile.type;
+        newHasAttachment = true;
+
+        // Optional: Delete old attachment if a new one is uploaded during edit
+        // if (isEdit && formData.attachmentUrl && formData.attachmentUrl !== newAttachmentUrl) {
+        //   try { await deleteObject(getStorageRef(tenantId, formData.attachmentUrl)); } catch (e) { console.warn("Could not delete old attachment", e); }
+        // }
+      } else if (isEdit && !formData.attachmentUrl && formData.hasAttachment) {
+        // If attachment was removed during edit
+        newAttachmentUrl = null;
+        newAttachmentType = null;
+        newHasAttachment = false;
+      }
+
       const data = {
         ...formData,
+        attachmentUrl: newAttachmentUrl,
+        attachmentType: newAttachmentType,
+        hasAttachment: newHasAttachment,
         updatedAt: serverTimestamp(),
         year: new Date(formData.date).getFullYear(),
         month: new Date(formData.date).getMonth() + 1,
@@ -59,7 +96,8 @@ const AnnouncementForm: React.FC = () => {
         t: formData.title.toLowerCase(),
         title: formData.title,
         date: formData.date,
-        deleted: false
+        deleted: false,
+        hasAttachment: newHasAttachment,
       };
 
       if (isEdit) {
@@ -76,6 +114,7 @@ const AnnouncementForm: React.FC = () => {
         updates[`tenants/${tenantId}/announcements/${timestampId}`] = { ...data, createdAt: serverTimestamp() };
         updates[`tenants/${tenantId}/announcement_search_index/${timestampId}`] = searchIndexData;
         await updateTimeStats(tenantId, 'announcement', formData.date, 1);
+        await updateCounter(tenantId, 'totalAnnouncements', 1);
         await logActivity(tenantId, { action: 'TAMBAH', target: 'PENGUMUMAN', title: formData.title });
       }
       
@@ -89,7 +128,17 @@ const AnnouncementForm: React.FC = () => {
     }
   };
 
-  if (fetching) return <DashboardLayout><div className="text-center py-5"><Spinner animation="border" variant="success" /></div></DashboardLayout>;
+  if (fetching || ownerLoading) return <DashboardLayout><div className="text-center py-5"><Spinner animation="border" variant="success" /></div></DashboardLayout>;
+  if (isOwner) return (
+    <DashboardLayout>
+      <Container fluid className="p-0">
+        <div className="p-4">
+          <div className="alert alert-warning">Fasilitas tambah/edit pengumuman tidak tersedia untuk Owner.</div>
+          <Button variant="success" onClick={() => navigate('/dashboard')} className="rounded-pill px-4">Kembali ke Dashboard</Button>
+        </div>
+      </Container>
+    </DashboardLayout>
+  );
 
   return (
     <DashboardLayout>
@@ -108,6 +157,11 @@ const AnnouncementForm: React.FC = () => {
               <Form.Group className="mb-3">
                 <Form.Label className="fw-bold small">Isi Pengumuman</Form.Label>
                 <Form.Control as="textarea" rows={8} value={formData.content} onChange={(e) => setFormData({...formData, content: e.target.value})} required />
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label className="fw-bold small">Lampiran (Opsional)</Form.Label>
+                <Form.Control type="file" onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAttachmentFile(e.target.files ? e.target.files[0] : null)} />
+                {formData.attachmentUrl && <small className="text-muted">File saat ini: <a href={formData.attachmentUrl} target="_blank" rel="noopener noreferrer">Lihat Lampiran</a></small>}
               </Form.Group>
               <Row>
                 <Col md={6}>

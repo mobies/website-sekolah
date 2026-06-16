@@ -5,12 +5,12 @@ import { FaArrowLeft, FaCloudUploadAlt, FaSyncAlt } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import ProgressiveImage from '../../components/ProgressiveImage';
 import { useTenant } from '../../firebase/TenantContext';
-import { getDBRef, getStorageRef, logActivity, updateCounter } from '../../firebase/utils';
+import { getDBRef, getStorageRef, logActivity, updateCounter, uploadBytesWithCache } from '../../firebase/utils';
 import { convertToWebP, convertUrlToWebP } from '../../firebase/imageUtils';
 import type { ImageMetadata } from '../../firebase/imageUtils';
 import { getImageMetadata, getStoragePathFromDownloadURL } from '../../firebase/imageUtils';
 import { onValue, set, push, serverTimestamp, update } from 'firebase/database';
-import { uploadBytes, getDownloadURL, ref, deleteObject } from 'firebase/storage';
+import { getDownloadURL, ref, deleteObject } from 'firebase/storage';
 import { showAlert, toast, showConfirm } from '../../utils/alerts';
 import { storage } from '../../firebase/config';
 
@@ -94,7 +94,7 @@ const GalleryForm: React.FC = () => {
         const webpBlob = await convertToWebP(imageFile);
         const fileName = `${Date.now()}_cover.webp`;
         const fileRef = getStorageRef(tenantId, `gallery/covers/${fileName}`);
-        await uploadBytes(fileRef, webpBlob);
+        await uploadBytesWithCache(fileRef, webpBlob);
         coverUrl = await getDownloadURL(fileRef);
         if (isEdit && originalData?.coverImage) {
           try {
@@ -146,7 +146,7 @@ const GalleryForm: React.FC = () => {
     try {
       const fileName = `${Date.now()}_cover_reconverted.webp`;
       const fileRef = getStorageRef(tenantId, `gallery/covers/${fileName}`);
-      await uploadBytes(fileRef, reconvertedBlob);
+      await uploadBytesWithCache(fileRef, reconvertedBlob);
       const newUrl = await getDownloadURL(fileRef);
       await update(getDBRef(tenantId, `gallery_albums/${id}`), { coverImage: newUrl });
       if (originalData.coverImage) {

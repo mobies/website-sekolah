@@ -71,7 +71,7 @@ const StaffSlider: React.FC = () => {
                     <ProgressiveImage
                       src={item.photo}
                       alt={item.name}
-                      style={{ height: '100%', width: '100%' }}
+                      style={{ height: '100%', width: '100%', objectPosition: 'center top' }}
                     />
                     <div className="position-absolute bottom-0 start-0 w-100 p-2 bg-gradient-dark text-white">
                        <div className="fw-bold small text-truncate" title={item.name}>{item.name}</div>
@@ -108,10 +108,15 @@ const StaffSlider: React.FC = () => {
         .staff-card-wrapper {
           flex: 0 0 calc(20% - 15px); /* Default 5 items */
           min-width: 180px;
+          aspect-ratio: 3 / 4;
+          display: flex;
         }
 
         .staff-card {
           transition: all 0.3s ease;
+          display: flex;
+          flex-direction: column;
+          width: 100%;
         }
 
         .staff-card:hover {
@@ -120,7 +125,8 @@ const StaffSlider: React.FC = () => {
         }
 
         .staff-image-container {
-          height: 220px;
+          flex: 1 1 auto;
+          min-height: 0;
           background-color: #f8f9fa;
         }
 

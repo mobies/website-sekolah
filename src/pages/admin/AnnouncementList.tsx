@@ -4,6 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { FaPlus, FaEdit, FaTrash, FaUndo, FaSyncAlt } from 'react-icons/fa';
 import DashboardLayout from '../../components/admin/DashboardLayout';
 import { useTenant } from '../../firebase/TenantContext';
+import { useIsOwner } from '../../firebase/useIsOwner';
 import { getDBRef, logActivity, updateCounter } from '../../firebase/utils';
 import { onValue, update, serverTimestamp, ref as dbRef, get } from 'firebase/database';
 import { rtdb as database } from '../../firebase/config';
@@ -26,6 +27,7 @@ const AnnouncementList: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
+  const { isOwner } = useIsOwner();
 
   useEffect(() => {
     if (!tenantId) return;
@@ -108,6 +110,7 @@ const AnnouncementList: React.FC = () => {
         }
       });
       updates[`tenants/${tenantId}/stats/announcement`] = stats;
+      updates[`tenants/${tenantId}/stats/totalAnnouncements`] = stats.total;
       await update(dbRef(database), updates);
       toast.fire({ icon: 'success', title: 'Sinkronisasi selesai' });
     } catch (error) { showAlert('Gagal', 'Kesalahan.', 'error'); } finally { setProcessing(false); }
@@ -121,7 +124,7 @@ const AnnouncementList: React.FC = () => {
           <div className="d-flex gap-2">
             <Button variant="outline-info" onClick={handleResummary} disabled={processing || loading}><FaSyncAlt /></Button>
             <Button variant="outline-secondary" onClick={() => setShowDeleted(!showDeleted)}>{showDeleted ? 'Lihat Aktif' : 'Lihat Sampah'}</Button>
-            <Button as={Link as any} to="/dashboard/pengumuman/tambah" variant="success"><FaPlus className="me-2" /> Tambah</Button>
+            {!isOwner && <Button as={Link as any} to="/dashboard/pengumuman/tambah" variant="success"><FaPlus className="me-2" /> Tambah</Button>}
           </div>
         </div>
         <Card className="border-0 shadow-sm"><Card.Body className="p-0">
@@ -136,7 +139,7 @@ const AnnouncementList: React.FC = () => {
                     <td className="pe-4 py-3 text-end">
                       <div className="d-flex justify-content-end gap-2">
                         {showDeleted ? (<Button onClick={() => handleRestore(item)} variant="light" size="sm" className="text-success"><FaUndo /></Button>) : (
-                        <><Button as={Link as any} to={`/dashboard/pengumuman/edit/${item.id}`} variant="light" size="sm" className="text-info"><FaEdit /></Button>
+                        <>{!isOwner && <Button as={Link as any} to={`/dashboard/pengumuman/edit/${item.id}`} variant="light" size="sm" className="text-info"><FaEdit /></Button>}
                           <Button onClick={() => handleDelete(item)} variant="light" size="sm" className="text-danger"><FaTrash /></Button></>
                         )}
                       </div>

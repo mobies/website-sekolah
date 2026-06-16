@@ -1,11 +1,10 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { ref, onValue } from 'firebase/database';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { ref, query, orderByChild, limitToLast, endAt, get } from 'firebase/database';
 import { rtdb as database } from '../firebase/config';
 import { useTenant } from '../firebase/TenantContext';
-import { useEditor } from '../firebase/useEditor';
 import { Link } from 'react-router-dom';
 import { Form, InputGroup, Button, Spinner } from 'react-bootstrap';
-import { FaBullhorn, FaCalendarDay, FaPlus } from 'react-icons/fa';
+import { FaBullhorn, FaCalendarDay } from 'react-icons/fa';
 
 interface AnnouncementIndexItem {
   id: string;
@@ -17,25 +16,91 @@ interface AnnouncementIndexItem {
 
 const AnnouncementListPublic: React.FC = () => {
   const { tenantId } = useTenant();
-  const { isEditor } = useEditor();
   const [indexData, setIndexData] = useState<AnnouncementIndexItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [lastCursor, setLastCursor] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     if (!tenantId) return;
     const indexRef = ref(database, `tenants/${tenantId}/announcement_search_index`);
-    onValue(indexRef, (snap) => {
+
+    const pageSize = 3;
+    const loadInitial = async () => {
+      setLoading(true);
+      try {
+        const q = query(indexRef, orderByChild('date'), limitToLast(pageSize));
+        const snap = await get(q);
+        const data = snap.val();
+        if (data) {
+          const list = Object.keys(data).map(key => ({ id: key, ...data[key] }))
+            .filter((item: AnnouncementIndexItem) => !item.deleted)
+            .sort((a: AnnouncementIndexItem, b: AnnouncementIndexItem) => b.date.localeCompare(a.date));
+          setIndexData(list);
+          if (list.length < pageSize) setHasMore(false);
+          setLastCursor(list.length ? list[list.length - 1].date : null);
+        } else {
+          setIndexData([]);
+          setHasMore(false);
+        }
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadInitial();
+  }, [tenantId]);
+
+  const loadMore = useCallback(async () => {
+    if (!tenantId || !hasMore || loadingMore || !lastCursor) return;
+    setLoadingMore(true);
+    const indexRef = ref(database, `tenants/${tenantId}/announcement_search_index`);
+    const pageSize = 3;
+    try {
+      // Fetch older items ending at the current cursor. We request pageSize+1 and drop the duplicate cursor item.
+      const q = query(indexRef, orderByChild('date'), endAt(lastCursor), limitToLast(pageSize + 1));
+      const snap = await get(q);
       const data = snap.val();
       if (data) {
-        const list = Object.keys(data).map(key => ({ id: key, ...data[key] }))
-          .filter(item => !item.deleted)
-          .sort((a, b) => b.date.localeCompare(a.date));
-        setIndexData(list);
-      } else setIndexData([]);
-      setLoading(false);
-    });
-  }, [tenantId]);
+        let list = Object.keys(data).map(key => ({ id: key, ...data[key] }))
+          .filter((item: AnnouncementIndexItem) => !item.deleted)
+          .sort((a: AnnouncementIndexItem, b: AnnouncementIndexItem) => b.date.localeCompare(a.date));
+
+        // Remove the duplicate that equals lastCursor (the most recent of previously loaded)
+        if (list.length && lastCursor) {
+          list = list.filter(it => it.date !== lastCursor);
+        }
+
+        if (list.length === 0) {
+          setHasMore(false);
+        } else {
+          setIndexData(prev => [...prev, ...list]);
+          setLastCursor(list[list.length - 1].date);
+          if (list.length < pageSize) setHasMore(false);
+        }
+      } else {
+        setHasMore(false);
+      }
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [tenantId, hasMore, loadingMore, lastCursor]);
+
+  useEffect(() => {
+    if (searchTerm) return; // disable infinite-scroll while searching
+    const onScroll = () => {
+      if (!hasMore || loadingMore) return;
+      const scrollPos = window.innerHeight + window.scrollY;
+      const threshold = document.body.offsetHeight - 400;
+      if (scrollPos >= threshold) {
+        loadMore();
+      }
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [hasMore, loadingMore, loadMore, searchTerm]);
 
   const filteredResults = useMemo(() => {
     return indexData.filter(item => !searchTerm || item.t.includes(searchTerm.toLowerCase()));
@@ -49,11 +114,6 @@ const AnnouncementListPublic: React.FC = () => {
         <div className="col-lg-8 text-center">
           <div className="d-flex align-items-center justify-content-center mb-4 gap-3">
             <h2 className="fw-bold mb-0">Pengumuman</h2>
-            {isEditor && (
-              <Button as={Link as any} to="/dashboard/pengumuman" variant="success" className="rounded-pill fw-bold px-3 shadow-sm" size="sm">
-                <FaPlus className="me-2" /> Tambah
-              </Button>
-            )}
           </div>
           <div className="card shadow-sm border-0 p-3 bg-white rounded-4">
             <InputGroup>
@@ -80,17 +140,17 @@ const AnnouncementListPublic: React.FC = () => {
                       </div>
                     </div>
                     <div className="d-flex align-items-center gap-2 ms-3">
-                      {isEditor && (
-                        <Button as={Link as any} to={`/dashboard/pengumuman/${item.id}`} size="sm" variant="outline-warning" className="rounded-pill px-3">
-                          <i className="bi bi-pencil-square me-1"></i> Edit
-                        </Button>
-                      )}
                       <Link to={`/pengumuman/${item.id}`} className="text-success"><i className="bi bi-chevron-right fs-4"></i></Link>
                     </div>
                   </div>
                 </div>
               </div>
           ))}
+
+          <div className="text-center my-3">
+            {loadingMore && <Spinner animation="border" variant="success" />}
+            {!loadingMore && !hasMore && <small className="text-muted">Tidak ada pengumuman lainnya</small>}
+          </div>
         </div>
       </div>
       <style>{`.hover-lift { transition: all 0.3s ease; } .hover-lift:hover { transform: translateX(5px); box-shadow: 0 0.5rem 1.5rem rgba(0,0,0,0.08) !important; }`}</style>

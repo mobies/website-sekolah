@@ -4,15 +4,14 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   FaTachometerAlt, 
   FaNewspaper, 
-  FaCalendarAlt, 
   FaImages, 
-  FaBullhorn, 
   FaUsers,
   FaEnvelope,
   FaUserCog,
   FaSignOutAlt,
   FaChevronDown,
-  FaChevronRight
+  FaChevronRight,
+  FaDatabase
 } from 'react-icons/fa';
 import { useTenant } from '../../firebase/TenantContext';
 import { getDBRef } from '../../firebase/utils';
@@ -27,7 +26,7 @@ const Sidebar: React.FC = () => {
   const { tenantId } = useTenant();
   const [schoolName, setSchoolName] = useState('MTsN 1 Garut');
   const [logo, setLogo] = useState('/logo.png');
-  const [openMenus, setOpenMenus] = useState<string[]>(['Galeri']); // Default open Galeri
+  const [openMenus, setOpenMenus] = useState<string[]>([]); // Default all collapsed
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -36,7 +35,7 @@ const Sidebar: React.FC = () => {
 
   const toggleMenu = (label: string) => {
     setOpenMenus(prev => 
-      prev.includes(label) ? prev.filter(m => m !== label) : [...prev, label]
+      prev.includes(label) ? [] : [label]
     );
   };
 
@@ -53,12 +52,36 @@ const Sidebar: React.FC = () => {
     return () => unsubscribe();
   }, [tenantId]);
 
+  // Auto-open menu group if current route is a submenu (accordion style)
+  useEffect(() => {
+    const menuGroupMap: { [key: string]: string[] } = {
+      'Konten Web Info': ['/dashboard/berita', '/dashboard/agenda', '/dashboard/pengumuman'],
+      'Galeri': ['/dashboard/galeri'],
+      'Data Induk': ['/dashboard/referensi/jadwal', '/dashboard/data-siswa', '/dashboard/data-rombel'],
+      'Data Referensi': ['/dashboard/staff', '/dashboard/referensi/tahun-ajaran', '/dashboard/referensi/kelas', '/dashboard/referensi/mapel', '/dashboard/referensi/pengajar', '/dashboard/referensi/pembayaran', '/dashboard/referensi/simpanan']
+    };
+
+    for (const [groupLabel, subPaths] of Object.entries(menuGroupMap)) {
+      const isCurrentPathInGroup = subPaths.some(path => location.pathname.startsWith(path));
+      if (isCurrentPathInGroup) {
+        setOpenMenus([groupLabel]);
+        return;
+      }
+    }
+    setOpenMenus([]);
+  }, [location.pathname]);
+
   const menuItems = [
     { path: '/dashboard', icon: <FaTachometerAlt />, label: 'Dashboard' },
-    { path: '/dashboard/berita', icon: <FaNewspaper />, label: 'Berita' },
-    { path: '/dashboard/agenda', icon: <FaCalendarAlt />, label: 'Agenda' },
-    { path: '/dashboard/pengumuman', icon: <FaBullhorn />, label: 'Pengumuman' },
-    { path: '/dashboard/staff', icon: <FaUsers />, label: 'Guru & Staf' },
+    { 
+      label: 'Konten Web Info',
+      icon: <FaNewspaper />,
+      subItems: [
+        { path: '/dashboard/berita', label: 'Berita' },
+        { path: '/dashboard/agenda', label: 'Agenda' },
+        { path: '/dashboard/pengumuman', label: 'Pengumuman' }
+      ]
+    },
     { path: '/dashboard/messages', icon: <FaEnvelope />, label: 'Pesan' },
     { 
       label: 'Galeri',
@@ -68,13 +91,35 @@ const Sidebar: React.FC = () => {
         { path: '/dashboard/galeri/video', label: 'Video' }
       ]
     },
+    { 
+      label: 'Data Referensi',
+      icon: <FaDatabase />,
+      subItems: [
+        { path: '/dashboard/referensi/tahun-ajaran', label: 'Tahun Ajaran' },
+        { path: '/dashboard/referensi/kelas', label: 'Data Kelas' },
+        { path: '/dashboard/referensi/mapel', label: 'Data Mapel' },
+        { path: '/dashboard/staff', label: 'Data Pegawai' },
+        { path: '/dashboard/referensi/pengajar', label: 'Data Pengajar' },
+        { path: '/dashboard/referensi/pembayaran', label: 'Item Pembayaran' },
+        { path: '/dashboard/referensi/simpanan', label: 'Item Simpanan' }
+      ]
+    },
+    { 
+      label: 'Data Induk',
+      icon: <FaUsers />,
+      subItems: [
+        { path: '/dashboard/referensi/jadwal', label: 'Item Jadwal' },
+        { path: '/dashboard/data-siswa', label: 'Data Siswa' },
+        { path: '/dashboard/data-rombel', label: 'Data Rombel' }
+      ]
+    },
     { divider: true },
     { path: '/dashboard/settings', icon: <FaUserCog />, label: 'Settings' },
   ];
 
   return (
-    <div className="admin-sidebar bg-white border-end d-flex flex-column" style={{ width: '260px', minHeight: '100vh', position: 'fixed', left: 0, top: 0, zIndex: 1000 }}>
-      <div className="p-4 border-bottom d-flex align-items-center">
+    <div className="admin-sidebar bg-white border-end d-flex flex-column" style={{ width: '260px', height: '100vh', position: 'fixed', left: 0, top: 0, zIndex: 1000, display: 'flex', flexDirection: 'column' }}>
+      <div className="p-4 border-bottom d-flex align-items-center" style={{ flexShrink: 0 }}>
         <div className="bg-success rounded-3 p-1 me-2 d-flex align-items-center justify-content-center" style={{ width: '40px', height: '40px' }}>
           <img src={logo} className="img-fluid object-fit-contain h-100" alt="Logo" />
         </div>
@@ -84,7 +129,7 @@ const Sidebar: React.FC = () => {
         </div>
       </div>
       
-      <div className="flex-grow-1 p-3 overflow-auto">
+      <div className="flex-grow-1 p-3" style={{ overflowY: 'auto', overflowX: 'hidden', minHeight: 0 }}>
         <Nav className="flex-column">
           {menuItems.map((item, idx) => {
             if (item.divider) return <hr key={`div-${idx}`} className="my-2" />;
@@ -141,7 +186,7 @@ const Sidebar: React.FC = () => {
         </Nav>
       </div>
 
-      <div className="p-3 border-top bg-light">
+      <div className="p-3 border-top bg-light" style={{ flexShrink: 0 }}>
         <div className="d-flex align-items-center mb-3">
           <div className="avatar me-2 bg-success text-white rounded-circle d-flex align-items-center justify-content-center" style={{ width: '35px', height: '35px' }}>
             <span className="small fw-bold">AD</span>

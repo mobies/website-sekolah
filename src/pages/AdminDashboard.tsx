@@ -10,11 +10,13 @@ import {
   FaPlus, 
   FaEdit,
   FaTrash,
-  FaUndo
+  FaUndo,
+  FaSyncAlt
 } from 'react-icons/fa';
 import { useTenant } from '../firebase/TenantContext';
 import { getDBRef } from '../firebase/utils';
-import { onValue, query, limitToLast } from 'firebase/database';
+import { onValue, query, limitToLast, get, update } from 'firebase/database';
+import { toast } from '../utils/alerts';
 
 interface ActivityLog {
   id: string;
@@ -35,6 +37,76 @@ const AdminDashboard: React.FC = () => {
   });
   const [logs, setLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refreshDashboard = async () => {
+    if (!tenantId) return;
+    setRefreshing(true);
+
+    try {
+      const [statsSnapshot, logsSnapshot, newsSnapshot, announcementsSnapshot] = await Promise.all([
+        get(getDBRef(tenantId, 'stats')),
+        get(query(getDBRef(tenantId, 'logs'), limitToLast(10))),
+        get(getDBRef(tenantId, 'news')),
+        get(getDBRef(tenantId, 'announcements'))
+      ]);
+
+      const statsData = statsSnapshot.val();
+      const newsData = newsSnapshot.val();
+      const announcementsData = announcementsSnapshot.val();
+
+      // Recount berita (exclude deleted)
+      let newsCount = 0;
+      if (newsData) {
+        Object.keys(newsData).forEach((k) => {
+          const it = newsData[k];
+          if (!it.deleted) newsCount++;
+        });
+      }
+
+      let announcementCount = 0;
+      if (announcementsData) {
+        Object.keys(announcementsData).forEach((k) => {
+          const it = announcementsData[k];
+          if (!it.deleted) announcementCount++;
+        });
+      }
+
+      // Update RTDB flat counters to keep them consistent
+      try {
+        await update(getDBRef(tenantId, 'stats'), { totalNews: newsCount, totalAnnouncements: announcementCount });
+      } catch (uErr) {
+        console.error('Gagal memperbarui summary dashboard di RTDB:', uErr);
+      }
+
+      if (statsData) {
+        setStats(prev => ({ ...prev, ...statsData, totalNews: newsCount, totalAnnouncements: announcementCount }));
+      } else {
+        setStats(prev => ({ ...prev, totalNews: newsCount, totalAnnouncements: announcementCount }));
+      }
+
+      const logsData = logsSnapshot.val();
+      if (logsData) {
+        const list = Object.keys(logsData).map(key => ({
+          id: key,
+          ...logsData[key]
+        }));
+        setLogs(list.reverse());
+      } else {
+        setLogs([]);
+      }
+      // Notify success to the user
+      try {
+        toast.fire({ icon: 'success', title: 'Refresh selesai — statistik diperbarui' });
+      } catch (tErr) {
+        console.info('Toast not available:', tErr);
+      }
+    } catch (error) {
+      console.error('Gagal memuat ulang dashboard:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
     if (!tenantId) return;
@@ -42,7 +114,18 @@ const AdminDashboard: React.FC = () => {
     // 1. Fetch Stats
     const statsRef = getDBRef(tenantId, 'stats');
     const unsubscribeStats = onValue(statsRef, (snap) => {
-      if (snap.val()) setStats(snap.val());
+      const data = snap.val();
+      if (data) {
+        setStats(prev => ({ ...prev, ...data }));
+      } else {
+        setStats({
+          totalNews: 0,
+          totalAgendas: 0,
+          totalAnnouncements: 0,
+          totalAlbums: 0,
+          totalPhotos: 0
+        });
+      }
     });
 
     // 2. Fetch Last 10 Logs
@@ -55,6 +138,8 @@ const AdminDashboard: React.FC = () => {
           ...data[key]
         }));
         setLogs(list.reverse());
+      } else {
+        setLogs([]);
       }
       setLoading(false);
     });
@@ -112,9 +197,16 @@ const AdminDashboard: React.FC = () => {
   return (
     <DashboardLayout>
       <Container fluid className="p-0">
-        <div className="mb-4">
-          <h4 className="fw-bold text-dark mb-1">Dashboard Overview</h4>
-          <p className="text-muted small">Ringkasan aktivitas {terms.school} Anda.</p>
+        <div className="d-flex justify-content-between align-items-start mb-4">
+          <div>
+            <h4 className="fw-bold text-dark mb-1">Dashboard Overview</h4>
+            <p className="text-muted small">Ringkasan aktivitas {terms.school} Anda.</p>
+          </div>
+          <div>
+            <Button variant="outline-secondary" size="sm" className="d-flex align-items-center" onClick={refreshDashboard} disabled={refreshing}>
+              <FaSyncAlt className="me-2" /> {refreshing ? 'Menyegarkan...' : 'Refresh'}
+            </Button>
+          </div>
         </div>
 
         <Row className="mb-4">

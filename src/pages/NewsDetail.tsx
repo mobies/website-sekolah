@@ -18,6 +18,7 @@ interface NewsItem {
   createdAt: number;
   date: string;
   category?: string;
+  namaAuthor?: string;
   deleted?: boolean;
   coverObjectFit?: 'cover' | 'contain' | 'fill';
 }
@@ -221,6 +222,7 @@ const NewsDetail: React.FC = () => {
               <div className="d-flex align-items-center text-muted mb-4 pb-3 border-bottom">
                 <i className="bi bi-calendar3 me-2 text-success"></i>
                 <span className="small fw-medium">{formattedDate}</span>
+                <span className="small fw-semibold ms-4">oleh {news.namaAuthor || 'Admin'}</span>
               </div>
               <div 
                 className="news-content" 

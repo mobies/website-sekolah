@@ -149,7 +149,7 @@ const StaffListPublic: React.FC = () => {
               <Col key={item.id} xl={3} lg={4} md={6} sm={6}>
                 <Card className="h-100 border-0 shadow-sm rounded-4 overflow-hidden staff-card-public">
                   <div className="position-relative staff-image-container-public cursor-pointer" onClick={() => { setSelectedImage(item.photo); setShowModal(true); }}>
-                    <ProgressiveImage src={item.photo} alt={item.name} style={{ height: '100%', width: '100%' }} />
+                    <ProgressiveImage src={item.photo} alt={item.name} style={{ height: '100%', width: '100%', objectPosition: 'center top' }} />
                     <div className="position-absolute bottom-0 start-0 w-100 p-2 bg-gradient-dark text-white">
                        <div className="fw-bold small text-truncate" title={item.name}>{item.name}</div>
                     </div>
@@ -176,9 +176,9 @@ const StaffListPublic: React.FC = () => {
       </Modal>
 
       <style>{`
-        .staff-card-public { transition: transform 0.3s ease; }
+        .staff-card-public { transition: transform 0.3s ease; aspect-ratio: 3 / 4; display: flex; flex-direction: column; width: 100%; }
         .staff-card-public:hover { transform: translateY(-5px); box-shadow: 0 1rem 3rem rgba(0,0,0,0.1) !important; }
-        .staff-image-container-public { height: 280px; background-color: #f8f9fa; }
+        .staff-image-container-public { flex: 1 1 auto; min-height: 0; background-color: #f8f9fa; }
         .bg-gradient-dark { background: linear-gradient(to top, rgba(0,0,0,0.7), transparent); }
         .extra-small { font-size: 0.7rem; }
         .uppercase { text-transform: uppercase; }

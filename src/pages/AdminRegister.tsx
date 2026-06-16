@@ -4,8 +4,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FaGoogle, FaSchool, FaUserCircle, FaIdCard, FaGlobe, FaCheckCircle } from 'react-icons/fa';
 import { auth, googleProvider } from '../firebase/config';
 import { signInWithPopup, onAuthStateChanged } from 'firebase/auth';
-import { getRootRef } from '../firebase/utils';
+import { getRootRef, getStorageRef, uploadBytesWithCache } from '../firebase/utils';
 import { set, get, serverTimestamp } from 'firebase/database';
+import { getDownloadURL } from 'firebase/storage';
+import { convertToWebP } from '../firebase/imageUtils';
 import { showAlert, toast } from '../utils/alerts';
 
 const AdminRegister: React.FC = () => {
@@ -24,7 +26,12 @@ const AdminRegister: React.FC = () => {
     npsn: '',
     level: 'MTs',
     adminName: '',
+    attachmentKind: 'image' as 'image' | 'pdf',
+    attachmentUrl: null as string | null,
+    attachmentName: null as string | null,
+    attachmentType: null as string | null,
   });
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
 
   useEffect(() => {
     // 1. Verify Token
@@ -78,6 +85,41 @@ const AdminRegister: React.FC = () => {
         return showAlert('Gagal', `Sekolah dengan ID "${tenantId}" sudah terdaftar atau sedang dalam proses peninjauan.`, 'error');
       }
 
+      let attachmentUrl: string | null = null;
+      let attachmentType: string | null = null;
+      let attachmentName: string | null = null;
+
+      if (attachmentFile) {
+        const kind = formData.attachmentKind;
+        if (kind === 'image') {
+          if (!attachmentFile.type.startsWith('image/')) {
+            setSubmitting(false);
+            return showAlert('Gagal', 'File yang dipilih bukan gambar.', 'error');
+          }
+          const webpBlob = await convertToWebP(attachmentFile, { maxSizeBytes: 100 * 1024 });
+          const storageRef = getStorageRef(tenantId, `registration-requests/${tenantId}/attachment.webp`);
+          const uploadResult = await uploadBytesWithCache(storageRef, webpBlob, 'image/webp');
+          attachmentUrl = await getDownloadURL(uploadResult.ref);
+          attachmentType = 'image/webp';
+          attachmentName = attachmentFile.name;
+        } else {
+          const sizeBytes = attachmentFile.size;
+          if (attachmentFile.type !== 'application/pdf' && !attachmentFile.name.toLowerCase().endsWith('.pdf')) {
+            setSubmitting(false);
+            return showAlert('Gagal', 'Hanya PDF yang diperbolehkan untuk lampiran ini.', 'error');
+          }
+          if (sizeBytes > 2 * 1024 * 1024) {
+            setSubmitting(false);
+            return showAlert('Gagal', 'File PDF melebihi batas maksimal 2MB.', 'error');
+          }
+          const storageRef = getStorageRef(tenantId, `registration-requests/${tenantId}/attachment.pdf`);
+          const uploadResult = await uploadBytesWithCache(storageRef, attachmentFile, 'application/pdf');
+          attachmentUrl = await getDownloadURL(uploadResult.ref);
+          attachmentType = 'application/pdf';
+          attachmentName = attachmentFile.name;
+        }
+      }
+
       // 2. Submit Request
       await set(getRootRef(`registration-requests/${tenantId}`), {
         ...formData,
@@ -86,7 +128,10 @@ const AdminRegister: React.FC = () => {
         adminUid: user.uid,
         status: 'pending',
         tokenUsed: token,
-        timestamp: serverTimestamp()
+        timestamp: serverTimestamp(),
+        attachmentUrl,
+        attachmentType,
+        attachmentName,
       });
 
       // 3. Mark token as used (optional, or leave for owner to clean up)
@@ -210,6 +255,42 @@ const AdminRegister: React.FC = () => {
                   />
                 </InputGroup>
               </Form.Group>
+
+              <Row className="g-3 mb-4">
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="fw-bold small">Jenis Lampiran</Form.Label>
+                    <Form.Select
+                      value={formData.attachmentKind}
+                      onChange={(e) => {
+                        setFormData({ ...formData, attachmentKind: e.target.value as 'image' | 'pdf' });
+                        setAttachmentFile(null);
+                      }}
+                    >
+                      <option value="image">Gambar</option>
+                      <option value="pdf">PDF</option>
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="fw-bold small">Unggah Lampiran</Form.Label>
+                    <Form.Control
+                      type="file"
+                      accept="image/*,application/pdf"
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const file = e.target.files?.[0] ?? null;
+                        setAttachmentFile(file);
+                      }}
+                    />
+                    <Form.Text className="text-muted">
+                      {formData.attachmentKind === 'image'
+                        ? 'Gambar akan dikonversi ke WebP dan dikompres sesuai aturan.'
+                        : 'PDF maksimal 2MB.'}
+                    </Form.Text>
+                  </Form.Group>
+                </Col>
+              </Row>
 
               <div className="bg-light p-3 rounded mb-4 d-flex align-items-center">
                 <img src={user.photoURL} alt="" className="rounded-circle me-3" style={{ width: '40px' }} />
