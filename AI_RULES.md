@@ -86,6 +86,40 @@ Dokumen ini berisi aturan wajib bagi Agent AI dalam mengerjakan proyek website S
 - **Batch Multiple Changes:** Jika ada 5 edits serupa (misal: 7 list pages), jelaskan pattern sekali, terapkan 7x tanpa repeat.
 - **Query When Ambiguous:** Tanya 1-2 clarifying question dengan concise format, bukan essay-style prompts.
 
+## 15.5 Optimasi Token Input (Wajib Efisiensi)
+
+### Context Gathering Strategy
+- **Grep Sebelum Semantic:** Gunakan `grep_search` (cheaper) TERLEBIH DAHULU sebelum semantic_search. Jika grep sudah cukup, jangan semantic_search.
+- **Parallel Queries:** Jalankan 3-4 independent searches secara bersamaan, bukan sequential.
+- **Lazy Loading Context:** Hanya fetch context yang benar-benar dibutuhkan. Jangan read full file jika cukup read 20-50 lines.
+- **Line Range Optimization:** Selalu gunakan startLine/endLine yang tepat pada read_file. Jangan read dari line 1 jika context mulai dari line 200.
+
+### Memory & Pattern Reuse
+- **Caching Project Structure:** Simpan di memory: file paths, common patterns, build commands, database schemas.
+- **Pattern Templates:** Gunakan pre-built patterns untuk CRUD operations (copy-adapt vs regenerate).
+- **Archive Old Sessions:** Hapus session memory yang >7 hari old. Simpan pola ke `/memories/repo/` untuk reuse jangka panjang.
+- **Quick Reference Index:** Maintain index file di `/memories/repo/quick-reference.md` untuk navigasi cepat.
+
+### Task Breakdown Strategy
+- **Split Complex Tasks:** Pisahkan large tasks menjadi focused sub-tasks (1 concern per request).
+- **Sampling for Exploration:** Untuk codebase baru/besar:
+  1. Read 20% strategic files (entry points, main components)
+  2. Gunakan semantic_search untuk understand patterns
+  3. Deep dive hanya jika sampling insufficient
+- **Batch Similar Changes:** Jika ada 5+ perubahan serupa (misal: 7 list pages), explain pattern 1x, apply 5+ tanpa repeat.
+
+### Quality Guardrails (No Compromise)
+- **Must Keep Full:** Code correctness, TypeScript strict mode, error handling, security checks, build verification
+- **Can Optimize:** Comment verbosity, explanation length, step-by-step guidance clarity
+
+### Target: 15-25% Token Savings
+- Current: ~170K tokens/feature
+- Target: ~130-145K tokens/feature (-15-25%)
+- Quality Impact: <2% (negligible)
+- Estimated Savings: $0.15-0.30 per feature implementation
+
+---
+
 ## 16. Konfirmasi Sebelum Eksekusi (Wajib)
 - **Requirement:** Sebelum membuat file baru, edit file existing, atau update routes/imports, **WAJIB minta konfirmasi ke user dulu**.
 - **Format Konfirmasi:** Proposal singkat dengan list file yang akan affected + jumlah lines.
